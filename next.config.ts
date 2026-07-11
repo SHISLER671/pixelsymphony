@@ -1,7 +1,19 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from "next"
 
 const nextConfig: NextConfig = {
-  /* config options here */
-};
+  // Pin turbopack root to this project (parent home dir has another lockfile)
+  turbopack: {
+    root: process.cwd(),
+  },
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "api.normies.art",
+        pathname: "/normie/**",
+      },
+    ],
+  },
+}
 
-export default nextConfig;
+export default nextConfig
