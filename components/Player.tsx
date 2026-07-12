@@ -112,15 +112,18 @@ export function Player({
       setScore(s)
       await audio.loadScore(s)
       if (ids.length > 6) {
-        toast.message(`Hive mix · ${ids.length} Normies`, {
-          description: `${s.parts.length} audio layers · synthwave stack`,
+        toast.message(`Forest mix · ${ids.length} Normies`, {
+          description: `${s.parts.length} layers · on-chain arrangement`,
         })
-      } else if (s.source === "fallback") {
-        toast.message("Synthwave from on-chain pixels", {
-          description: "Deterministic hive arrangement (Venice optional)",
+      } else if (s.source === "venice") {
+        toast.success("Venice arrangement ready", {
+          description: "Cached for this selection to save inference",
         })
       } else {
-        toast.success("Venice arrangement ready")
+        // Silent-friendly: fallback is the normal path under rate limits
+        toast.message("On-chain arrangement", {
+          description: "Pixels + traits · Venice reserved for limited AI boosts",
+        })
       }
     } catch (err) {
       console.error(err)

@@ -132,16 +132,36 @@ export function parseVoiceScore(raw: string): VoiceScore | null {
   }
 }
 
-/** Client: Venice when small ensemble; always-good synthwave fallback otherwise */
+/** Client memory cache — same selection won't re-hit the API this session. */
+const clientScoreCache = new Map<string, VoiceScore>()
+
+function clientCacheKey(voices: NormieVoiceInput[]): string {
+  return voices
+    .map((v) => {
+      let on = 0
+      for (let i = 0; i < v.pixels.length; i++) if (v.pixels[i] === "1") on++
+      return `${v.tokenId}:${on}:${v.role}`
+    })
+    .join("|")
+}
+
+/**
+ * Client: try Venice (budgeted + cached server-side); always-good fallback.
+ * Large ensembles skip Venice entirely.
+ */
 export async function translateToScore(
   voices: NormieVoiceInput[],
 ): Promise<VoiceScore> {
   if (voices.length === 0) return buildFallbackScore(voices)
 
-  // Large hive → deterministic mix only (fast + reliable)
+  // Large hive → deterministic mix only (fast + no Venice spend)
   if (voices.length > VENICE_VOICE_CAP) {
     return buildFallbackScore(voices)
   }
+
+  const key = clientCacheKey(voices)
+  const cached = clientScoreCache.get(key)
+  if (cached) return cached
 
   try {
     const res = await fetch("/api/translate", {
@@ -150,22 +170,41 @@ export async function translateToScore(
       body: JSON.stringify({ voices }),
     })
     if (res.ok) {
-      const data = (await res.json()) as { score?: VoiceScore }
+      const data = (await res.json()) as {
+        score?: VoiceScore
+        reason?: string
+      }
       if (data.score?.parts?.length) {
-        const unique = new Set(
-          data.score.parts.flatMap((p) =>
-            p.notes.filter((n) => n && n !== "rest"),
-          ),
-        )
-        // Prefer Venice if it has melodic variety; else fallback
-        if (unique.size >= 4) {
-          return { ...data.score, source: "venice" }
+        // Only mark as venice when the server actually used AI
+        const fromVenice =
+          data.reason === "venice" || data.reason === "venice_cache"
+        if (fromVenice) {
+          const unique = new Set(
+            data.score.parts.flatMap((p) =>
+              p.notes.filter((n) => n && n !== "rest"),
+            ),
+          )
+          if (unique.size >= 4) {
+            const score = { ...data.score, source: "venice" as const }
+            clientScoreCache.set(key, score)
+            return score
+          }
         }
+        // Rate-limited / fallback path — still play, tag correctly
+        const score = {
+          ...data.score,
+          source: data.score.source === "venice" ? "venice" as const : "fallback" as const,
+        }
+        // Cache fallbacks briefly so spam-clicking doesn't re-POST
+        clientScoreCache.set(key, score)
+        return score.source === "venice" ? score : buildFallbackScore(voices)
       }
     }
   } catch {
     // fallback
   }
 
-  return buildFallbackScore(voices)
+  const score = buildFallbackScore(voices)
+  clientScoreCache.set(key, score)
+  return score
 }
