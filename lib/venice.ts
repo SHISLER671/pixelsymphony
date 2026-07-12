@@ -46,22 +46,21 @@ export function buildTranslatePrompt(voices: NormieVoiceInput[]): string {
     }
   })
 
-  return `You are PixelSymphony — mycelium forest music from Normie NFTs (not a buzzing hive).
+  return `You are PixelSymphony — forest synth songs from Normie NFTs.
 
 INPUT (authentic on-chain data only):
 ${JSON.stringify(compact, null, 2)}
 
-FEEL: live forest network. One organism pings; others answer later. Long silence between signals. Reverb connects them like soil.
+FEEL: one Normie = a full song (lead + pad + bass + harmony phrases). Multiple = same song bed with answering phrases, light stagger — NOT empty silence, NOT a wall of bees.
 
 INSTRUMENTS: ${INSTRUMENTS.join(", ")}
 - Type/Accessory pick instrument; Expression/Age/Eyes modulate envelope & filter.
 
 HARD RULES:
-1. SPARSE mycelium pings — mostly "rest". NOT dense arps or bee-hive buzzing.
-2. Long cycle: ~64 quarter-note steps (durations often 0.6–2.5s). bpm 55–85.
-3. Each part needs startOffset (seconds) so voices enter staggered across the loop.
-4. Soft pad + occasional bass from primary; other Normies = sparse answering pings.
-5. notes: C4 / D#3 / "rest". source "venice". synopsis one plain sentence.
+1. MELODIC PHRASES (3–8 notes) with short breaths — never a single repeated beep, never long empty voids.
+2. Cycle ~64 eighth notes, bpm 75–105. Solo must include pad, bass, lead, harmony.
+3. Multi: primary full stack; others startOffset small (0–20% of loop) with answering phrases.
+4. notes: C4 / D#3 / "rest". source "venice". synopsis one plain sentence.
 
 Return ONLY JSON:
 {

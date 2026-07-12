@@ -277,20 +277,20 @@ export async function loadScore(score: VoiceScore): Promise<void> {
   T.Transport.swingSubdivision = "4n"
   T.getDestination().volume.value = volumeDb
 
-  // Forest bus: long reverb so sparse pings cross-pollinate
-  const bus = new T.Gain(0.88)
+  // Forest bus: musical glue without drowning phrases
+  const bus = new T.Gain(0.9)
   const chorus = new T.Chorus({
-    frequency: 0.35,
-    delayTime: 4.5,
-    depth: 0.35,
-    wet: 0.18,
+    frequency: 0.55,
+    delayTime: 3.8,
+    depth: 0.4,
+    wet: 0.2,
   }).start()
   const delay = new T.FeedbackDelay({
-    delayTime: "4n",
-    feedback: 0.32,
-    wet: 0.2,
+    delayTime: "8n",
+    feedback: 0.26,
+    wet: 0.18,
   })
-  const reverb = new T.Reverb({ decay: 7.5, preDelay: 0.04, wet: 0.48 })
+  const reverb = new T.Reverb({ decay: 4.2, preDelay: 0.025, wet: 0.32 })
   await reverb.generate()
   bus.chain(chorus, delay, reverb, T.getDestination())
   fxNodes.push(bus, chorus, delay, reverb)
