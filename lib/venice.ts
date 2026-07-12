@@ -46,33 +46,22 @@ export function buildTranslatePrompt(voices: NormieVoiceInput[]): string {
     }
   })
 
-  return `You are PixelSymphony — you make Normie NFTs SING as an 80s synthwave / AI-agent choir (warm, emotional, not chiptune beeps).
+  return `You are PixelSymphony — mycelium forest music from Normie NFTs (not a buzzing hive).
 
 INPUT (authentic on-chain data only):
 ${JSON.stringify(compact, null, 2)}
 
-INSTRUMENTS (what makes sound) — pick from Type / Accessory / Gender:
-${INSTRUMENTS.join(", ")}
-- agent → agent-pad or human-lead (hymn / AI vocal feel)
-- human → human-lead, choir-ah, glass-keys
-- cat → cat-pluck
-- alien → alien-bell or arp-pulse
-- always include bass-sub for low end on solo
+FEEL: live forest network. One organism pings; others answer later. Long silence between signals. Reverb connects them like soil.
 
-MODULATORS (how it sounds) — Expression, Age, Eyes, Hair, Facial, pixels:
-- Expression → phrasing (friendly = legato; angry = short; sad = space + reverb)
-- Age → tempo bias + attack/release
-- Eyes → filterHz (shades dark, laser bright)
-- Pixels → melody contour + rhythm density
-- attack/decay/sustain/release in seconds; reverbSend/delaySend 0–1
+INSTRUMENTS: ${INSTRUMENTS.join(", ")}
+- Type/Accessory pick instrument; Expression/Age/Eyes modulate envelope & filter.
 
 HARD RULES:
-1. SOUND LIKE SYNTHWAVE / AGENT HYMN — long notes, pads, bass, melody. NOT 16th-note chiptune beeps.
-2. Use ~32 steps of mostly 8th notes (durations ~0.25–1.0s at 90 BPM). Include rests.
-3. Melodies MOVE (no more than 2 same pitches in a row).
-4. Solo: at least 3 parts — lead (human-lead or agent-pad), pad (agent-pad/choir-ah), bass (bass-sub).
-5. Multiple Normies: distinct instruments/registers.
-6. notes: C4 / D#3 / "rest". source must be "venice".
+1. SPARSE mycelium pings — mostly "rest". NOT dense arps or bee-hive buzzing.
+2. Long cycle: ~64 quarter-note steps (durations often 0.6–2.5s). bpm 55–85.
+3. Each part needs startOffset (seconds) so voices enter staggered across the loop.
+4. Soft pad + occasional bass from primary; other Normies = sparse answering pings.
+5. notes: C4 / D#3 / "rest". source "venice". synopsis one plain sentence.
 
 Return ONLY JSON:
 {
@@ -80,6 +69,7 @@ Return ONLY JSON:
   "root": string,
   "scale": "major"|"minor"|"pentatonic"|"phrygian"|"wholetone"|"dorian"|"mixolydian",
   "swing": number,
+  "loopSeconds": number,
   "parts": [{
     "role": "primary"|"harmony"|"counter"|"pad"|"bass"|"arp",
     "instrument": string,
@@ -93,7 +83,9 @@ Return ONLY JSON:
     "release": number,
     "pan": number,
     "reverbSend": number,
-    "delaySend": number
+    "delaySend": number,
+    "startOffset": number,
+    "tokenId": number
   }],
   "synopsis": string,
   "source": "venice"

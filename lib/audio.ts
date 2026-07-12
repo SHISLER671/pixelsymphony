@@ -236,8 +236,8 @@ function createInstrument(
     triggerAttackRelease: (note, duration, time) => {
       if (!note || note === "rest") return
       try {
-        // Allow long pad notes (up to 4s) — no 0.35 staccato cap
-        const dur = Math.min(Math.max(duration, 0.05), 4)
+        // Long forest pings / pads (tails live in reverb)
+        const dur = Math.min(Math.max(duration, 0.05), 6)
         trigger(note, dur, time)
       } catch {
         /* skip bad notes */
@@ -273,24 +273,24 @@ export async function loadScore(score: VoiceScore): Promise<void> {
 
   currentScore = score
   T.Transport.bpm.value = score.bpm
-  T.Transport.swing = score.swing ?? 0.04
-  T.Transport.swingSubdivision = "8n"
+  T.Transport.swing = score.swing ?? 0.02
+  T.Transport.swingSubdivision = "4n"
   T.getDestination().volume.value = volumeDb
 
-  // Master synthwave bus: chorus → delay → reverb
-  const bus = new T.Gain(0.9)
+  // Forest bus: long reverb so sparse pings cross-pollinate
+  const bus = new T.Gain(0.88)
   const chorus = new T.Chorus({
-    frequency: 0.8,
-    delayTime: 3.5,
-    depth: 0.5,
-    wet: 0.25,
+    frequency: 0.35,
+    delayTime: 4.5,
+    depth: 0.35,
+    wet: 0.18,
   }).start()
   const delay = new T.FeedbackDelay({
-    delayTime: "8n",
-    feedback: 0.28,
-    wet: 0.22,
+    delayTime: "4n",
+    feedback: 0.32,
+    wet: 0.2,
   })
-  const reverb = new T.Reverb({ decay: 3.2, preDelay: 0.02, wet: 0.35 })
+  const reverb = new T.Reverb({ decay: 7.5, preDelay: 0.04, wet: 0.48 })
   await reverb.generate()
   bus.chain(chorus, delay, reverb, T.getDestination())
   fxNodes.push(bus, chorus, delay, reverb)
@@ -307,6 +307,16 @@ export async function loadScore(score: VoiceScore): Promise<void> {
     mediaDest = null
   }
 
+  const fromParts = score.parts.reduce((max, part) => {
+    const len = part.durations.reduce(
+      (a, b) => a + Math.max(0.05, Math.min(b, 4)),
+      0,
+    )
+    return Math.max(max, len)
+  }, 0)
+  const sharedLoop =
+    score.loopSeconds ?? (fromParts > 0 ? fromParts : (60 / score.bpm) * 64)
+
   for (const part of score.parts) {
     const s = createInstrument(T, part, bus)
     synths.push(s)
@@ -314,20 +324,15 @@ export async function loadScore(score: VoiceScore): Promise<void> {
     let t = 0
     const events: Array<{ time: number; note: string; dur: number }> = []
     for (let i = 0; i < part.notes.length; i++) {
-      const rawDur = part.durations[i] ?? 0.2
-      const dur = Math.max(0.03, rawDur)
+      const rawDur = part.durations[i] ?? 0.25
+      const dur = Math.max(0.05, rawDur)
       const note = part.notes[i]
       if (note && note !== "rest") {
         events.push({ time: t, note, dur })
       }
-      // advance by at least a small quantum even for long notes
-      t += Math.max(0.05, Math.min(rawDur, 2))
+      // Grid advance (allow longer held pings without collapsing the cycle)
+      t += Math.max(0.08, Math.min(rawDur, 4))
     }
-
-    // Fix loop length from total intended grid
-    const loopEnd =
-      part.durations.reduce((a, b) => a + Math.max(0.05, Math.min(b, 2)), 0) ||
-      (60 / score.bpm) * 8
 
     if (events.length === 0) continue
 
@@ -338,19 +343,11 @@ export async function loadScore(score: VoiceScore): Promise<void> {
     }, events)
 
     seq.loop = true
-    seq.loopEnd = loopEnd
-    seq.start(0)
+    seq.loopEnd = sharedLoop
+    // Mycelium stagger: nodes enter the network at different points
+    const offset = Math.max(0, part.startOffset ?? 0) % sharedLoop
+    seq.start(offset)
     sequences.push(seq)
-  }
-
-  let maxLoop = 0
-  for (const seq of sequences) {
-    if (typeof seq.loopEnd === "number" && seq.loopEnd > maxLoop) {
-      maxLoop = seq.loopEnd
-    }
-  }
-  if (maxLoop > 0) {
-    for (const seq of sequences) seq.loopEnd = maxLoop
   }
 }
 
@@ -395,11 +392,13 @@ export function getTransportProgress(): number {
   if (!tone || !currentScore) return 0
   try {
     const pos = tone.Transport.seconds
-    const part = currentScore.parts[0]
-    if (!part) return 0
     const len =
-      part.durations.reduce((a, b) => a + Math.max(0.05, Math.min(b, 2)), 0) ||
-      8
+      currentScore.loopSeconds ||
+      currentScore.parts[0]?.durations.reduce(
+        (a, b) => a + Math.max(0.05, Math.min(b, 4)),
+        0,
+      ) ||
+      32
     return (pos % len) / len
   } catch {
     return 0

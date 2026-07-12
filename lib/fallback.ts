@@ -160,8 +160,9 @@ function roleOf(kind: LayerKind): VoiceRole {
 }
 
 /**
- * Synthwave phrase: longer notes, legato pads, melodic lead, breathing rests.
- * Grid is 16 steps × 4 bars (eighth notes) for a musical loop.
+ * Mycelium / forest network phrase.
+ * Long cycle (16 bars of quarters), mostly silence, occasional "pings"
+ * that answer each other across the loop — not a dense hive buzz.
  */
 function buildLayer(
   voice: NormieVoiceInput,
@@ -171,11 +172,11 @@ function buildLayer(
   kind: LayerKind,
   rng: () => number,
   gainScale = 1,
+  startOffset = 0,
 ): VoicePart {
   const dens = pixelDensity(voice.pixels)
   const energy = rowBands(voice.pixels, 16)
   const contour = contourBands(voice.pixels, 16)
-  const type = traitValue(voice.traits, "Type") || "Human"
   const expression = traitValue(voice.traits, "Expression").toLowerCase()
   const age = traitValue(voice.traits, "Age").toLowerCase()
   const eyes = traitValue(voice.traits, "Eyes").toLowerCase()
@@ -183,106 +184,68 @@ function buildLayer(
   const facial = traitValue(voice.traits, "Facial Feature")
   const accessory = traitValue(voice.traits, "Accessory")
   const degrees = SCALES[scale]
-  const eighth = beatSec(bpm) / 2
-  const steps = 32 // 4 bars of 8ths
+  // Quarter-note grid — slower, room to breathe
+  const quarter = beatSec(bpm)
+  // 16 bars = long forest cycle (~32–48s at 60–80 BPM)
+  const steps = 64
   const notes: string[] = []
   const durations: number[] = []
 
   const instrument = instrumentFromTraits(voice.traits, roleOf(kind), voice.tokenId)
   const motif = hashString(hair + facial + accessory + String(voice.tokenId)) % degrees.length
 
-  // MODULATORS — Expression / Age / Eyes
-  let restBias = 0.12
-  let legato = 1.1 // hold longer than step for pad/lead glue
-  let attack = 0.04
-  let decay = 0.2
-  let sustain = 0.45
-  let release = 0.35
-  let reverbSend = 0.25
-  let delaySend = 0.18
+  // Soft, wet, patient envelopes (mycelium ping, not staccato bee)
+  let attack = 0.08
+  let decay = 0.35
+  let sustain = 0.25
+  let release = 1.4
+  let reverbSend = 0.45
+  let delaySend = 0.22
+  let filterHz = 700 + dens * 1200
 
-  if (expression.includes("friendly") || expression.includes("happy")) {
-    restBias = 0.06
-    legato = 1.25
-    attack = 0.06
-    sustain = 0.55
-    reverbSend = 0.32
-  } else if (expression.includes("angry") || expression.includes("mad")) {
-    restBias = 0.04
-    legato = 0.75
-    attack = 0.01
-    sustain = 0.2
-    release = 0.12
-    delaySend = 0.08
-  } else if (expression.includes("sad") || expression.includes("sleepy")) {
-    restBias = 0.22
-    legato = 1.6
-    attack = 0.12
-    sustain = 0.6
+  if (expression.includes("angry") || expression.includes("mad")) {
+    attack = 0.02
     release = 0.7
-    reverbSend = 0.45
-  } else if (expression.includes("smug") || expression.includes("cool")) {
-    restBias = 0.14
-    legato = 1.0
-    delaySend = 0.28
+  } else if (expression.includes("sad") || expression.includes("sleepy")) {
+    attack = 0.2
+    release = 2.2
+    reverbSend = 0.55
+  } else if (expression.includes("friendly")) {
+    release = 1.6
+    reverbSend = 0.48
   }
 
   if (age === "old") {
-    attack *= 1.4
+    attack *= 1.5
     release *= 1.3
-    bpm // tempo handled outside
   } else if (age === "young") {
-    attack *= 0.7
-    release *= 0.8
+    attack *= 0.75
   }
 
-  let filterHz = 1200 + dens * 1600
-  if (eyes.includes("shade") || eyes.includes("closed")) {
-    filterHz *= 0.5
-    reverbSend += 0.08
-  }
-  if (eyes.includes("laser") || eyes.includes("glow")) {
-    filterHz *= 1.4
-    delaySend += 0.1
-  }
-  if (eyes.includes("big")) filterHz *= 1.15
+  if (eyes.includes("shade") || eyes.includes("closed")) filterHz *= 0.55
+  if (eyes.includes("laser") || eyes.includes("glow")) filterHz *= 1.3
 
-  // Instrument-specific envelope defaults
   if (instrument === "agent-pad" || instrument === "choir-ah") {
-    attack = Math.max(attack, 0.18)
-    sustain = Math.max(sustain, 0.65)
-    release = Math.max(release, 0.8)
-    legato = Math.max(legato, 1.8)
-    reverbSend = Math.max(reverbSend, 0.4)
+    attack = Math.max(0.25, attack)
+    sustain = 0.55
+    release = Math.max(2.0, release)
+    reverbSend = 0.55
   } else if (instrument === "bass-sub") {
-    attack = 0.02
-    sustain = 0.5
-    release = 0.25
-    filterHz = Math.min(filterHz, 600)
-    reverbSend = 0.08
-  } else if (instrument === "cat-pluck" || instrument === "glass-keys") {
-    attack = 0.005
-    decay = 0.25
-    sustain = 0.15
-    release = 0.2
-    legato = 0.85
-  } else if (instrument === "alien-bell") {
-    attack = 0.01
-    decay = 0.4
-    sustain = 0.2
-    release = 0.9
-    reverbSend = 0.5
-  } else if (instrument === "arp-pulse") {
-    attack = 0.005
-    sustain = 0.1
-    release = 0.08
-    legato = 0.7
-    delaySend = 0.35
-  } else if (instrument === "human-lead") {
-    attack = Math.max(0.03, attack)
+    attack = 0.04
     sustain = 0.4
-    release = 0.4
-    legato = 1.15
+    release = 0.9
+    filterHz = Math.min(filterHz, 420)
+    reverbSend = 0.15
+  } else if (instrument === "alien-bell" || instrument === "cat-pluck") {
+    attack = 0.01
+    decay = 0.5
+    sustain = 0.08
+    release = 1.8
+    reverbSend = 0.55
+  } else if (instrument === "human-lead") {
+    attack = 0.06
+    sustain = 0.3
+    release = 1.2
   }
 
   let baseOctave = 4
@@ -292,148 +255,155 @@ function buildLayer(
   else if (kind === "harmony") baseOctave = 5
   if (age === "old" && kind === "lead") baseOctave = 3
 
-  let lastDegree = -99
-  let sameCount = 0
-  let i = 0
-  while (i < steps) {
+  // How often this voice "pings" the network (sparse)
+  let pingChance =
+    kind === "pad"
+      ? 0.06
+      : kind === "bass"
+        ? 0.1
+        : kind === "arp"
+          ? 0.14
+          : kind === "harmony"
+            ? 0.11
+            : 0.13
+  // Denser pixels → slightly more signals, never a buzz
+  pingChance = Math.min(0.22, pingChance + dens * 0.08)
+
+  // Minimum gap between pings (steps) — mycelium spacing
+  const minGap =
+    kind === "pad" ? 10 : kind === "bass" ? 7 : kind === "arp" ? 4 : 5
+  let sincePing = minGap // allow early first ping after offset phase
+
+  for (let i = 0; i < steps; i++) {
     const band = i % 16
     const e = energy[band] ?? 0
     const c = contour[band] ?? 0.5
+    sincePing++
 
-    // Bass: half notes on roots
-    if (kind === "bass") {
-      if (i % 4 !== 0) {
-        notes.push("rest")
-        durations.push(eighth)
-        i++
-        continue
-      }
-      const bassDeg = degrees[i % 8 < 4 ? 0 : Math.min(4, degrees.length - 1)]
-      notes.push(noteName(rootIndex, bassDeg, baseOctave))
-      durations.push(eighth * 2 * legato)
-      // skip next step in grid time
-      notes.push("rest")
-      durations.push(eighth * 0.01) // tiny spacer so sum stays ~even
-      i += 2
-      continue
-    }
-
-    // Pad: long held tones (every 4 eighths = half bar)
+    // Soft bed: pad only holds rare long tones
     if (kind === "pad") {
-      if (i % 4 !== 0) {
+      const fire = sincePing >= minGap && (e > 0.25 || rng() < pingChance)
+      if (!fire) {
         notes.push("rest")
-        durations.push(eighth)
-        i++
+        durations.push(quarter)
         continue
       }
-      const deg = degrees[(motif + Math.floor(i / 4) * 2) % degrees.length]
+      sincePing = 0
+      const deg = degrees[(motif + Math.floor(i / 8)) % degrees.length]
       notes.push(noteName(rootIndex, deg, baseOctave))
-      // Hold across 4 steps; remaining steps are rests for grid
-      durations.push(eighth * 3.6)
-      notes.push("rest")
-      durations.push(eighth * 0.4)
-      i += 4
+      durations.push(quarter * 3.5)
+      // consume next 2 steps as micro-rests for grid alignment
+      if (i + 1 < steps) {
+        notes.push("rest")
+        durations.push(quarter * 0.5)
+        i++
+      }
       continue
     }
 
-    // Arp: steady 16th-feel on 8th grid with motion
-    if (kind === "arp") {
-      if (e < 0.08 && rng() < 0.3) {
+    // Bass: slow root pulses, not a pump
+    if (kind === "bass") {
+      const fire = sincePing >= minGap && i % 8 === 0 && rng() < 0.7
+      if (!fire) {
         notes.push("rest")
-        durations.push(eighth)
-        i++
+        durations.push(quarter)
         continue
       }
-      const deg =
-        degrees[(motif + i + Math.floor(c * 3)) % degrees.length]
-      notes.push(noteName(rootIndex, deg, baseOctave + (i % 4 === 0 ? 0 : 0)))
-      durations.push(eighth * 0.85)
-      i++
+      sincePing = 0
+      const bassDeg = degrees[i % 16 < 8 ? 0 : Math.min(4, degrees.length - 1)]
+      notes.push(noteName(rootIndex, bassDeg, baseOctave))
+      durations.push(quarter * 2.2)
       continue
     }
 
-    // Lead / harmony: melodic with expression rests
-    const thr = 0.05 + dens * 0.08
-    if (e < thr && rng() < restBias + (1 - e) * 0.2) {
+    // Lead / harmony / arp: sparse answering pings
+    const energyBoost = e * 0.35
+    const fire =
+      sincePing >= minGap &&
+      (rng() < pingChance + energyBoost ||
+        // guarantee a few landmarks from pixel peaks
+        (e > 0.45 && sincePing >= minGap - 1 && rng() < 0.4))
+
+    if (!fire) {
       notes.push("rest")
-      durations.push(eighth)
-      i++
+      durations.push(quarter)
       continue
     }
 
+    sincePing = 0
     let degreeIdx = Math.floor(
-      (c * (degrees.length - 1) + e * 3 + motif + i * 0.35) % degrees.length,
+      (c * (degrees.length - 1) + motif + i * 0.2) % degrees.length,
     )
     degreeIdx = ((degreeIdx % degrees.length) + degrees.length) % degrees.length
-    if (degreeIdx === lastDegree) {
-      sameCount++
-      if (sameCount >= 2) {
-        degreeIdx = (degreeIdx + 1 + Math.floor(rng() * 3)) % degrees.length
-        sameCount = 0
-      }
-    } else sameCount = 0
-    lastDegree = degreeIdx
+    if (kind === "harmony") degreeIdx = (degreeIdx + 2) % degrees.length
 
     let octave = baseOctave
     if (e > 0.4) octave += 1
-    if (c < 0.2) octave = Math.max(3, octave - 1)
-    if (kind === "harmony") {
-      // third above
-      degreeIdx = (degreeIdx + 2) % degrees.length
-    }
+    if (c < 0.25) octave = Math.max(3, octave - 1)
 
-    // Longer notes on strong beats
-    const hold = i % 4 === 0 ? 2 : i % 2 === 0 ? 1.5 : 1
+    // Single sustained "ping" into the reverb network
+    const hold =
+      kind === "arp" ? 1.2 + rng() * 0.8 : 1.6 + rng() * 1.4
     notes.push(noteName(rootIndex, degrees[degreeIdx], octave))
-    durations.push(eighth * hold * legato * (expression.includes("angry") ? 0.7 : 1))
-    i++
+    durations.push(quarter * hold)
   }
 
-  // Normalize total duration to ~4 bars of 8ths
-  const targetLen = eighth * steps
+  // Normalize to full cycle length
+  const targetLen = quarter * steps
   let total = durations.reduce((a, b) => a + b, 0)
-  if (total > 0 && Math.abs(total - targetLen) / targetLen > 0.15) {
-    const scale = targetLen / total
-    for (let j = 0; j < durations.length; j++) durations[j] *= scale
+  if (total > 0 && Math.abs(total - targetLen) / targetLen > 0.12) {
+    const sc = targetLen / total
+    for (let j = 0; j < durations.length; j++) durations[j] *= sc
   }
 
-  // Ensure enough hits
-  if (notes.filter((n) => n !== "rest").length < 4) {
-    for (let s = 0; s < steps; s += 4) {
-      notes[s] = noteName(rootIndex, degrees[(motif + s) % degrees.length], baseOctave)
-      durations[s] = eighth * 2
+  // At least a few pings so solo isn't silence
+  if (notes.filter((n) => n !== "rest").length < 3) {
+    for (let s = 4; s < steps; s += 16) {
+      notes[s] = noteName(
+        rootIndex,
+        degrees[(motif + s) % degrees.length],
+        baseOctave,
+      )
+      durations[s] = quarter * 2
     }
   }
 
   const gainBase =
     kind === "lead"
-      ? 0.28
+      ? 0.26
       : kind === "pad"
-        ? 0.16
+        ? 0.1
         : kind === "bass"
-          ? 0.24
+          ? 0.18
           : kind === "arp"
             ? 0.12
             : 0.14
 
   const pan =
-    kind === "harmony" ? 0.35 : kind === "arp" ? -0.25 : kind === "pad" ? -0.1 : 0
+    kind === "harmony"
+      ? 0.4
+      : kind === "arp"
+        ? -0.35
+        : kind === "pad"
+          ? -0.08
+          : (hashString(String(voice.tokenId)) % 100) / 100 - 0.5
 
   return {
     role: roleOf(kind),
     instrument,
     notes,
     durations,
-    filterHz: Math.round(Math.min(5200, Math.max(120, filterHz))),
-    gain: Math.max(0.04, gainBase * gainScale),
+    filterHz: Math.round(Math.min(4200, Math.max(100, filterHz))),
+    gain: Math.max(0.03, gainBase * gainScale),
     attack,
     decay,
     sustain,
     release,
-    pan,
-    reverbSend: Math.min(0.7, reverbSend),
-    delaySend: Math.min(0.5, delaySend),
+    pan: Math.max(-0.7, Math.min(0.7, pan)),
+    reverbSend: Math.min(0.75, reverbSend),
+    delaySend: Math.min(0.45, delaySend),
     tokenId: voice.tokenId,
+    startOffset,
   }
 }
 
@@ -472,20 +442,22 @@ function pickHiveVoices(voices: NormieVoiceInput[]): NormieVoiceInput[] {
 }
 
 /**
- * Synthwave / agent-hymn score from live pixels + traits.
- * Solo: lead + pad + bass (complete).
- * Multi / ALL: primary full stack + each extra Normie as a layer (capped).
+ * Mycelium forest score from live pixels + traits.
+ * Long cycle; voices enter staggered and ping sparsely into a shared reverb bed.
+ * Solo: soft soil (pad+bass) + primary lead pings.
+ * Multi: each Normie is a node in the network — not all buzzing at once.
  */
 export function buildFallbackScore(voices: NormieVoiceInput[]): VoiceScore {
   if (voices.length === 0) {
     return {
-      bpm: 96,
+      bpm: 72,
       root: "A",
       scale: "dorian",
       parts: [],
-      synopsis: "No Normies selected — silence in the hive.",
+      synopsis: "No Normies selected — silence in the forest.",
       source: "fallback",
-      swing: 0.05,
+      swing: 0.02,
+      loopSeconds: 32,
     }
   }
 
@@ -502,47 +474,66 @@ export function buildFallbackScore(voices: NormieVoiceInput[]): VoiceScore {
   const dens = pixelDensity(primary.pixels)
   const type = traitValue(primary.traits, "Type") || "Human"
   const age = traitValue(primary.traits, "Age")
-  const expression = traitValue(primary.traits, "Expression") || "Unknown"
-  const eyes = traitValue(primary.traits, "Eyes")
 
-  let bpm = Math.round(82 + dens * 40) // slower, more synthwave
-  if (age.toLowerCase() === "old") bpm = Math.round(bpm * 0.9)
-  if (age.toLowerCase() === "young") bpm = Math.round(bpm * 1.08)
-  bpm = Math.min(118, Math.max(72, bpm))
+  // Forest tempo — slow enough for long decay tails to cross
+  let bpm = Math.round(58 + dens * 28)
+  if (age.toLowerCase() === "old") bpm = Math.round(bpm * 0.92)
+  if (age.toLowerCase() === "young") bpm = Math.round(bpm * 1.06)
+  bpm = Math.min(88, Math.max(52, bpm))
 
   const scale = scaleFromType(type)
   const rootIndex = seed % 12
   const root = ROOTS[rootIndex]
   const n = hive.length
-  const gainScale = n <= 3 ? 1 : 1 / Math.sqrt(n * 0.55)
+  const gainScale = n <= 2 ? 1 : 1 / Math.sqrt(n * 0.45)
+  // 64 quarter-notes at bpm
+  const loopSeconds = (60 / bpm) * 64
 
   const parts: VoicePart[] = []
 
-  // Primary: full synthwave stack
+  // Soil bed from primary only — quiet continuous mycelium undergrowth
   parts.push(
-    buildLayer(primary, scale, rootIndex, bpm, "lead", mulberry32(seed ^ 0x11), gainScale),
+    buildLayer(
+      primary,
+      scale,
+      rootIndex,
+      bpm,
+      "pad",
+      mulberry32(seed ^ 0x22),
+      gainScale * 0.75,
+      0,
+    ),
   )
   parts.push(
-    buildLayer(primary, scale, rootIndex, bpm, "pad", mulberry32(seed ^ 0x22), gainScale * 0.9),
-  )
-  parts.push(
-    buildLayer(primary, scale, rootIndex, bpm, "bass", mulberry32(seed ^ 0x33), gainScale),
+    buildLayer(
+      primary,
+      scale,
+      rootIndex,
+      bpm,
+      "bass",
+      mulberry32(seed ^ 0x33),
+      gainScale * 0.85,
+      loopSeconds * 0.08,
+    ),
   )
 
-  // Remaining hive members — one expressive layer each
-  for (let i = 1; i < hive.length; i++) {
+  // Each Normie = one network node with staggered entry (mycelium, not hive)
+  for (let i = 0; i < hive.length; i++) {
     const v = hive[i]
     const t = traitValue(v.traits, "Type").toLowerCase()
-    let kind: LayerKind = "harmony"
-    if (t === "agent") kind = "pad"
-    else if (t === "alien") kind = "arp"
-    else if (t === "cat") kind = "arp"
-    else if (i % 3 === 0) kind = "harmony"
-    else if (i % 3 === 1) kind = "pad"
+    let kind: LayerKind = "lead"
+    if (i === 0) kind = "lead"
+    else if (t === "agent") kind = "pad"
+    else if (t === "alien" || t === "cat") kind = "arp"
+    else if (i % 2 === 1) kind = "harmony"
     else kind = "lead"
 
-    // Avoid too many leads drowning the mix
-    if (kind === "lead" && i > 2) kind = "harmony"
+    // Spread nodes across the full cycle so they answer, not pile on
+    const stagger =
+      n <= 1
+        ? 0
+        : (i / n) * loopSeconds * 0.85 +
+          ((hashString(String(v.tokenId)) % 1000) / 1000) * (loopSeconds * 0.06)
 
     parts.push(
       buildLayer(
@@ -552,18 +543,17 @@ export function buildFallbackScore(voices: NormieVoiceInput[]): VoiceScore {
         bpm,
         kind,
         mulberry32(seed ^ ((i + 1) * 0x9e3779b9)),
-        gainScale * 0.85,
+        gainScale * (i === 0 ? 1 : 0.8),
+        stagger,
       ),
     )
   }
 
-  // Soft audio part cap (primary stack already 3)
   const capped = parts.slice(0, MAX_AUDIO_PARTS)
 
-  // Short plain synopsis — UI builds a full structured story from score + voices
   const synopsis =
     voices.length <= 1
-      ? `${primary.name || `Normie #${primary.tokenId}`} sings a ${root} ${scale} synthwave loop at ${bpm} BPM.`
+      ? `${primary.name || `Normie #${primary.tokenId}`} singing in ${root} ${scale} at ${bpm} BPM.`
       : `${voices.length} Normies singing together in ${root} ${scale} at ${bpm} BPM.`
 
   return {
@@ -573,6 +563,7 @@ export function buildFallbackScore(voices: NormieVoiceInput[]): VoiceScore {
     parts: capped,
     synopsis,
     source: "fallback",
-    swing: 0.04,
+    swing: 0.02,
+    loopSeconds,
   }
 }

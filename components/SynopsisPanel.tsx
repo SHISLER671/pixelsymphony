@@ -1,10 +1,23 @@
 "use client"
 
-import { useMemo } from "react"
-
 import type { NormieVoiceInput, VoiceScore } from "@/lib/types"
-import { buildSynopsisStory } from "@/lib/synopsis"
 import { cn } from "@/lib/utils"
+
+function roleLabel(index: number): string {
+  if (index === 0) return "Lead"
+  if (index === 1) return "Harmony"
+  if (index === 2) return "Counter"
+  if (index % 3 === 0) return "Lead"
+  if (index % 3 === 1) return "Harmony"
+  return "Counter"
+}
+
+function traitLabels(voice: NormieVoiceInput): string[] {
+  return voice.traits
+    .filter((t) => !["Level", "Pixel Count", "Action Points", "Customized"].includes(t.trait_type))
+    .slice(0, 6)
+    .map((t) => `${t.trait_type}: ${t.value}`)
+}
 
 export function SynopsisPanel({
   score,
@@ -15,130 +28,82 @@ export function SynopsisPanel({
   voices: NormieVoiceInput[]
   className?: string
 }) {
-  const story = useMemo(
-    () => (score ? buildSynopsisStory(score, voices) : null),
-    [score, voices],
-  )
-
-  if (!score || !story) {
+  if (!score) {
     return (
       <div
         className={cn(
-          "bevel-inset p-4 text-xs text-muted-foreground",
+          "synopsis p-4 bg-[#111] border border-[#333] font-mono text-sm text-[#777]",
           className,
         )}
       >
-        Play a Normie and the synopsis will explain — in plain language — how
-        its pixels and traits became this song.
+        Select Normies and press Play — the forest will write itself here.
       </div>
     )
   }
 
+  const key = `${score.root} ${score.scale}`
+  const tempo = score.bpm
+  const badge =
+    score.source === "venice" ? "VENICE" : "ON-CHAIN"
+
   return (
-    <div className={cn("bevel-inset space-y-4 p-4", className)}>
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0 space-y-1">
-          <h3 className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-            Synopsis
-          </h3>
-          <p className="text-base font-medium leading-snug text-primary">
-            {story.headline}
-          </p>
-          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-            {story.vibe}
-          </p>
-        </div>
+    <div
+      className={cn(
+        "synopsis p-4 bg-[#111] border border-[#333] font-mono text-sm",
+        className,
+      )}
+    >
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <h3 className="text-white tracking-[0.2em]">SYNOPSIS</h3>
         <span
           className={cn(
-            "shrink-0 rounded px-1.5 py-0.5 text-[9px] uppercase tracking-wider",
+            "px-2 py-1 text-xs",
             score.source === "venice"
-              ? "bg-primary/20 text-primary"
-              : "bg-muted text-muted-foreground",
+              ? "bg-[#222] text-[#0f0]"
+              : "bg-[#222] text-[#aaa]",
           )}
         >
-          {score.source === "venice" ? "Venice" : "On-chain mix"}
+          {badge}
         </span>
       </div>
 
-      {/* Meta strip */}
-      <div className="flex flex-wrap gap-2">
-        <MetaChip>{story.meta.bpm} BPM</MetaChip>
-        <MetaChip>
-          {story.meta.key} {story.meta.scale}
-        </MetaChip>
-        <MetaChip>
-          {voices.length} {voices.length === 1 ? "Normie" : "Normies"}
-        </MetaChip>
-      </div>
+      <p className="mb-4 text-[#aaa]">
+        {voices.length === 0
+          ? "Silence in the forest."
+          : voices.length === 1
+            ? `1 Normie singing in ${key} at ${tempo} BPM.`
+            : `${voices.length} Normies singing together in ${key} at ${tempo} BPM.`}
+      </p>
 
-      {/* Natural prose */}
-      <div className="space-y-2.5 border-t border-border/60 pt-3">
-        {story.paragraphs.map((p, i) => (
-          <p
-            key={i}
-            className="text-sm leading-relaxed text-foreground/90"
-          >
-            {p}
-          </p>
-        ))}
-      </div>
-
-      {/* Cast / instruments */}
-      {story.cast.length > 0 && (
-        <div className="space-y-2 border-t border-border/60 pt-3">
-          <h4 className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-            Who&apos;s playing
-          </h4>
-          <ul className="space-y-1.5">
-            {story.cast.map((c, i) => (
-              <li
-                key={`${c.name}-${c.role}-${i}`}
-                className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm"
-              >
-                <span className="text-primary">{c.role}</span>
-                <span className="text-muted-foreground">·</span>
-                <span className="text-foreground/90">{c.instrument}</span>
-                <span className="text-[11px] text-muted-foreground">
-                  ({c.name})
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Trait influences */}
-      {story.influences.length > 0 && (
-        <div className="space-y-2 border-t border-border/60 pt-3">
-          <h4 className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-            How traits shape the sound
-          </h4>
-          <dl className="space-y-2">
-            {story.influences.map((inf) => (
-              <div key={`${inf.trait}-${inf.value}`} className="text-sm">
-                <dt className="inline font-medium text-primary">
-                  {inf.trait}
-                  <span className="font-normal text-muted-foreground">
-                    {" "}
-                    · {inf.value}
-                  </span>
-                </dt>
-                <dd className="mt-0.5 text-foreground/85 leading-relaxed">
-                  {inf.effect}
-                </dd>
+      <div className="space-y-6">
+        {voices.map((normie, index) => {
+          const type =
+            normie.traits.find((t) => t.trait_type === "Type")?.value ??
+            "Normie"
+          const traits = traitLabels(normie)
+          return (
+            <div
+              key={normie.tokenId}
+              className="border-l-2 border-[#0f0]/50 pl-4"
+            >
+              <div className="mb-2 font-medium text-white">
+                #{normie.tokenId} {String(type)} — {roleLabel(index)}
               </div>
-            ))}
-          </dl>
-        </div>
-      )}
-    </div>
-  )
-}
 
-function MetaChip({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="bevel border-0 bg-secondary px-2 py-0.5 text-[10px] uppercase tracking-wide text-secondary-foreground">
-      {children}
-    </span>
+              <div className="flex flex-wrap gap-2 text-xs">
+                {traits.map((trait, i) => (
+                  <span
+                    key={`${normie.tokenId}-${i}`}
+                    className="rounded border border-[#444] bg-[#1a1a1a] px-3 py-1 text-[#ccc]"
+                  >
+                    {trait}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
   )
 }

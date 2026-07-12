@@ -59,6 +59,8 @@ export interface VoicePart {
   reverbSend?: number
   delaySend?: number
   tokenId?: number
+  /** Seconds into the shared loop before this part enters (mycelium stagger) */
+  startOffset?: number
 }
 
 export interface VoiceScore {
@@ -69,6 +71,8 @@ export interface VoiceScore {
   synopsis: string
   source: "venice" | "fallback"
   swing?: number
+  /** Shared loop length in seconds (forest cycle) */
+  loopSeconds?: number
 }
 
 export interface OwnedNormieSummary {
