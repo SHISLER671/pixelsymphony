@@ -73,16 +73,62 @@ export async function blobToWav(blob: Blob): Promise<Blob> {
 
 /** Best video mime the browser can record for social upload. */
 export function pickVideoMime(): string | null {
+  return pickTwitterVideoProfile()?.mime ?? null
+}
+
+export type TwitterVideoProfile = {
+  mime: string
+  ext: "mp4" | "webm"
+  /** True only when codecs are likely H.264 + AAC (X-friendly). */
+  twitterSafe: boolean
+}
+
+/**
+ * Pick a recorder profile for X/Twitter.
+ * Never label a file .mp4 unless we have a real MP4/AAC path —
+ * wrong extensions cause X "Incompatible audio codecs".
+ */
+export function pickTwitterVideoProfile(): TwitterVideoProfile | null {
   if (typeof MediaRecorder === "undefined") return null
-  const candidates = [
-    "video/mp4",
-    "video/mp4;codecs=avc1,mp4a.40.2",
-    "video/webm;codecs=vp9,opus",
+
+  // Explicit AVC + AAC — best for X when the browser supports it (often Safari)
+  const mp4Safe = [
+    'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+    'video/mp4;codecs="avc1.42E01E,mp4a.40.2"',
+    "video/mp4;codecs=avc1.4D401E,mp4a.40.2",
+    "video/mp4;codecs=avc1.64001F,mp4a.40.2",
+  ]
+  for (const m of mp4Safe) {
+    if (MediaRecorder.isTypeSupported(m)) {
+      return { mime: m, ext: "mp4", twitterSafe: true }
+    }
+  }
+
+  // Safari / Apple WebKit bare video/mp4 is usually H.264 + AAC
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent : ""
+  const isAppleWebKit =
+    /AppleWebKit/i.test(ua) &&
+    !/Chrome|Chromium|CriOS|Edg|OPR|Firefox|FxiOS/i.test(ua)
+  if (isAppleWebKit && MediaRecorder.isTypeSupported("video/mp4")) {
+    return { mime: "video/mp4", ext: "mp4", twitterSafe: true }
+  }
+
+  // Chrome/Firefox: WebM is reliable. Do NOT rename to .mp4 (breaks X audio).
+  const webm = [
     "video/webm;codecs=vp8,opus",
+    "video/webm;codecs=vp9,opus",
+    "video/webm;codecs=vp8",
     "video/webm",
   ]
-  for (const m of candidates) {
-    if (MediaRecorder.isTypeSupported(m)) return m
+  for (const m of webm) {
+    if (MediaRecorder.isTypeSupported(m)) {
+      return { mime: m, ext: "webm", twitterSafe: false }
+    }
+  }
+
+  // Last resort: bare video/mp4 on non-Apple (may still fail X audio check)
+  if (MediaRecorder.isTypeSupported("video/mp4")) {
+    return { mime: "video/mp4", ext: "mp4", twitterSafe: false }
   }
   return null
 }
@@ -93,6 +139,92 @@ export function extensionForMime(mime: string): string {
   if (mime.includes("mpeg") || mime.includes("mp3")) return "mp3"
   if (mime.includes("webm")) return "webm"
   return "bin"
+}
+
+/**
+ * Record canvas (Normie pixels) + live audio bus into a short video blob.
+ * Plays alongside whatever is already scheduled on the audio engine.
+ */
+export async function recordPixelVideoBlip(options: {
+  canvas: HTMLCanvasElement
+  /** Live audio MediaStream (e.g. Tone destination tap) */
+  audioStream: MediaStream | null
+  durationMs?: number
+  fps?: number
+}): Promise<{ blob: Blob; filename: string; twitterSafe: boolean; mime: string }> {
+  const profile = pickTwitterVideoProfile()
+  if (!profile) {
+    throw new Error("This browser cannot record video")
+  }
+
+  const durationMs = options.durationMs ?? 12_000
+  const fps = options.fps ?? 30
+  const canvasStream = options.canvas.captureStream(fps)
+
+  const tracks: MediaStreamTrack[] = [...canvasStream.getVideoTracks()]
+  if (options.audioStream) {
+    for (const t of options.audioStream.getAudioTracks()) {
+      if (t.readyState === "live") tracks.push(t)
+    }
+  }
+  const combined = new MediaStream(tracks)
+
+  const chunks: Blob[] = []
+  let recorder: MediaRecorder
+  try {
+    recorder = new MediaRecorder(combined, {
+      mimeType: profile.mime,
+      videoBitsPerSecond: 2_500_000,
+      audioBitsPerSecond: 128_000,
+    })
+  } catch {
+    // Some browsers reject bitsPerSecond or exact mime — retry bare
+    recorder = new MediaRecorder(combined, { mimeType: profile.mime })
+  }
+
+  recorder.ondataavailable = (e) => {
+    if (e.data.size > 0) chunks.push(e.data)
+  }
+
+  const done = new Promise<Blob>((resolve, reject) => {
+    recorder.onerror = () => reject(new Error("Video recording failed"))
+    recorder.onstop = () => {
+      const type = profile.mime.split(";")[0] || profile.mime
+      resolve(new Blob(chunks, { type }))
+    }
+  })
+
+  recorder.start(100)
+  await new Promise((r) => setTimeout(r, durationMs))
+  if (recorder.state !== "inactive") recorder.stop()
+
+  // Only stop canvas video tracks we created
+  for (const t of canvasStream.getVideoTracks()) t.stop()
+
+  const blob = await done
+  if (blob.size < 1000) {
+    throw new Error("Recording was empty — try Play first, then Share on X")
+  }
+
+  const filename = `pixelsymphony-blip-${Date.now()}.${profile.ext}`
+  return {
+    blob,
+    filename,
+    twitterSafe: profile.twitterSafe && profile.ext === "mp4",
+    mime: profile.mime,
+  }
+}
+
+/** Open X/Twitter compose with pre-filled text (web cannot auto-attach files). */
+export function openXCompose(text: string, pageUrl?: string) {
+  const params = new URLSearchParams()
+  params.set("text", text)
+  if (pageUrl) params.set("url", pageUrl)
+  window.open(
+    `https://twitter.com/intent/tweet?${params.toString()}`,
+    "_blank",
+    "noopener,noreferrer",
+  )
 }
 
 export function downloadBlob(blob: Blob, filename: string) {
