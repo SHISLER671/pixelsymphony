@@ -15,8 +15,25 @@ Standalone web app where Normie NFTs sing from **live on-chain pixels and traits
 ```bash
 npm install
 cp .env.example .env.local
-# set VENICE_API_KEY and NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
+# set VENICE_API_KEY, VENICE_BASE_URL, VENICE_MODEL
+# and NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
 npm run dev
+```
+
+### Venice AI
+
+OpenAI-compatible client (`lib/venice-client.ts`) pointed at `https://api.venice.ai/api/v1`.
+
+| Env | Purpose |
+|-----|---------|
+| `VENICE_API_KEY` | Server-only API key (never `NEXT_PUBLIC_`) |
+| `VENICE_BASE_URL` | Default `https://api.venice.ai/api/v1` |
+| `VENICE_MODEL` | Default `zai-org-glm-5-2` |
+
+Smoke test (loads `.env.local`, does not print the full key):
+
+```bash
+node scripts/venice-smoke.mjs
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
