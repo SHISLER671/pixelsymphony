@@ -3,6 +3,7 @@ import Image from "next/image"
 
 import { ConnectWallet } from "@/components/ConnectWallet"
 import { HowItWorks } from "@/components/HowItWorks"
+import { WalletSafetyNote } from "@/components/WalletSafetyNote"
 
 export default function HomePage() {
   return (
@@ -48,7 +49,8 @@ export default function HomePage() {
 
         <HowItWorks className="text-left" />
 
-        <div className="flex flex-col items-center gap-3">
+        <div className="flex w-full flex-col items-center gap-3">
+          <WalletSafetyNote className="w-full max-w-md" />
           <ConnectWallet />
           <Link
             href="/player"

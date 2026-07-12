@@ -8,6 +8,7 @@ import { useAccount } from "wagmi"
 import { ConnectWallet } from "@/components/ConnectWallet"
 import { LoadingIcon } from "@/components/LoadingIcon"
 import { Player } from "@/components/Player"
+import { WalletSafetyNote } from "@/components/WalletSafetyNote"
 import { resolveAccessibleNormiesDetailed } from "@/lib/ownership"
 import { SAMPLE_NORMIE_IDS } from "@/lib/types"
 
@@ -112,6 +113,7 @@ function PlayerPageInner() {
             Token-gated for Normie holders and Delegate.xyz hot wallets (v1 +
             v2). Or try sample mode with live on-chain demo Normies.
           </p>
+          <WalletSafetyNote className="text-left" />
           <div className="flex flex-col items-center gap-3">
             <ConnectWallet />
             <Link href="/player?sample=1" className="btn-retro">
