@@ -254,6 +254,16 @@ export function openBlankTabForShare(): Window | null {
   return window.open("about:blank", "_blank")
 }
 
+/** Facebook only supports sharing a URL via web (not video files). */
+export function openFacebookShare(pageUrl: string) {
+  const params = new URLSearchParams({ u: pageUrl })
+  window.open(
+    `https://www.facebook.com/sharer/sharer.php?${params.toString()}`,
+    "_blank",
+    "noopener,noreferrer",
+  )
+}
+
 export function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")

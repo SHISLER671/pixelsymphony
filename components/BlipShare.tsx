@@ -8,6 +8,7 @@ import * as audio from "@/lib/audio"
 import {
   downloadBlob,
   openBlankTabForShare,
+  openFacebookShare,
   openXCompose,
 } from "@/lib/blip-export"
 import {
@@ -306,8 +307,7 @@ export function BlipShare({
     }
   }
 
-  // On mobile, "Share on X" also uses the mobile cascade but prefers opening
-  // the share sheet so the user can pick the X app.
+  // On mobile, "Share on X" uses the mobile cascade so the user can pick the X app.
   async function shareOnX() {
     if (mobile) {
       await shareMobile()
@@ -316,10 +316,88 @@ export function BlipShare({
     await shareOnXDesktop()
   }
 
+  /** Instagram has no web upload — mobile share sheet or save files for the app. */
+  async function shareInstagram() {
+    if (disabled || busy) return
+    if (mobile && hasShareApi) {
+      toast.message("Instagram", {
+        description:
+          "Use Share → pick Instagram (Stories/Reels/Feed) or Save Video / Files, then open IG.",
+      })
+      await shareMobile()
+      return
+    }
+    // Desktop: prepare assets then instruct
+    setBusy(true)
+    setBusyKind("wav")
+    try {
+      await audio.unlockAudio()
+      toast.message("Preparing Instagram assets…", {
+        description: "WAV + optional video for the IG app",
+      })
+      const blob = await audio.captureAsWAV(WAV_DESKTOP_MS)
+      downloadBlob(blob, `pixelsymphony-blip-${Date.now()}.wav`)
+      const canvas = getCanvas?.() ?? null
+      if (canvas) {
+        try {
+          await audio.ensureRecordingTap()
+          await audio.play()
+          const audioStream =
+            (await audio.ensureRecordingTap()) || audio.getRecordingStream()
+          const { blob: vid, filename } = await createTwitterBlip({
+            sourceCanvas: canvas,
+            audioStream,
+            durationMs: VIDEO_DESKTOP_MS,
+          })
+          downloadBlob(vid, filename)
+          toast.success("Saved MP4 + WAV for Instagram", {
+            description:
+              "Open the Instagram app → create Reel/Story → add from Camera Roll / Files",
+          })
+        } catch {
+          toast.success("WAV saved for Instagram", {
+            description:
+              "IG has no desktop upload. Open the app on your phone and add the file, or use Share on mobile.",
+          })
+        }
+      } else {
+        toast.success("WAV saved", {
+          description: "Open Instagram on your phone and upload from Files",
+        })
+      }
+    } catch (e) {
+      toast.error("Could not prepare IG assets", {
+        description: e instanceof Error ? e.message : "Try Save Blip",
+      })
+    } finally {
+      setBusy(false)
+      setBusyKind(null)
+    }
+  }
+
+  function shareFacebook() {
+    if (disabled) return
+    if (mobile && hasShareApi) {
+      // File share sheet can target Facebook app when video/wav ready
+      toast.message("Facebook", {
+        description:
+          "Share sheet → Facebook. Or post the link; video must be added in the FB app.",
+      })
+      void shareMobile()
+      return
+    }
+    // Web: Facebook only accepts a URL (not a local video file)
+    openFacebookShare(pageUrl)
+    toast.message("Facebook link share opened", {
+      description:
+        "FB web only shares a link. For video: Save Blip / Share on X MP4, then upload in the Facebook app or facebook.com create post.",
+    })
+  }
+
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-2">
-        {/* Mobile primary CTA */}
+        {/* Mobile primary CTA — X, IG, FB, TikTok all live here */}
         {mobile && hasShareApi && (
           <button
             type="button"
@@ -344,7 +422,7 @@ export function BlipShare({
 
         <button
           type="button"
-          className={`btn-retro inline-flex items-center gap-2 ${busyKind === "x" || (mobile && busyKind === "mobile") ? "btn-retro-active" : ""}`}
+          className={`btn-retro inline-flex items-center gap-2 ${busyKind === "x" ? "btn-retro-active" : ""}`}
           disabled={disabled || busy}
           onClick={shareOnX}
         >
@@ -352,8 +430,26 @@ export function BlipShare({
           {busyKind === "x"
             ? "Encoding…"
             : mobile
-              ? "Share → X"
+              ? "→ X"
               : "Share on X"}
+        </button>
+
+        <button
+          type="button"
+          className="btn-retro inline-flex items-center gap-2"
+          disabled={disabled || busy}
+          onClick={shareInstagram}
+        >
+          IG
+        </button>
+
+        <button
+          type="button"
+          className="btn-retro inline-flex items-center gap-2"
+          disabled={disabled || busy}
+          onClick={shareFacebook}
+        >
+          FB
         </button>
       </div>
 
@@ -361,16 +457,20 @@ export function BlipShare({
         {mobile ? (
           <>
             <span className="text-foreground/80">Share</span> opens your phone’s
-            share sheet (X, Messages, Files, TikTok). Tries video → audio →
-            image so something always works.{" "}
-            <span className="text-foreground/80">Save Blip</span> keeps a WAV.
+            sheet — pick{" "}
+            <span className="text-foreground/80">X, Instagram, Facebook, TikTok</span>
+            , Messages, or Files. Tries video → WAV → image.{" "}
+            <span className="text-foreground/80">Save Blip</span> keeps audio.
           </>
         ) : (
           <>
-            <span className="text-foreground/80">Share on X</span> opens compose
-            with text, then downloads an H.264 MP4 to attach.{" "}
-            <span className="text-foreground/80">Save Blip</span> = universal
-            WAV.
+            <span className="text-foreground/80">Share on X</span> = pretfill +
+            MP4 download.{" "}
+            <span className="text-foreground/80">IG</span> prepares MP4/WAV for
+            the Instagram app (no web upload).{" "}
+            <span className="text-foreground/80">FB</span> opens a link share;
+            upload video in the Facebook app.{" "}
+            <span className="text-foreground/80">Save Blip</span> = WAV.
           </>
         )}
       </p>
