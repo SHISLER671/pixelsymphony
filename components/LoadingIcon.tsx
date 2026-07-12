@@ -5,7 +5,7 @@ import Image from "next/image"
 import { cn } from "@/lib/utils"
 
 export function LoadingIcon({
-  label = "Tuning into the hive…",
+  label = "Tuning in…",
   className,
   size = 64,
 }: {

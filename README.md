@@ -1,6 +1,6 @@
 # PixelSymphony
 
-> Your Normies are singing — tune into the hive.
+> Your Normies are singing — tune in.
 
 Standalone web app where Normie NFTs sing from **live on-chain pixels and traits**. Monochrome 90s Windows Media Player UI, 80s synthwave audio (Tone.js), Venice AI translation with deterministic fallback.
 

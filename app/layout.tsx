@@ -18,7 +18,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "PixelSymphony — Your Normies are singing",
   description:
-    "Tune into the hive. Awakened Normies sing from live on-chain pixels and traits.",
+    "Tune in. Normies sing from live on-chain pixels and traits.",
   icons: {
     icon: "/normie-logo.svg",
   },

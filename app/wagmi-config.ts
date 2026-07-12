@@ -19,7 +19,7 @@ const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || DEFAULT_RPC_URL
 
 export const wagmiConfig = getDefaultConfig({
   appName: "PixelSymphony",
-  appDescription: "Your Normies are singing — tune into the hive.",
+  appDescription: "Your Normies are singing — tune in.",
   appUrl,
   appIcon: `${appUrl}/normie-logo.svg`,
   projectId,

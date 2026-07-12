@@ -75,7 +75,7 @@ export function BlipShare({
       const file = new File([recorded], filename, { type: recorded.type })
       const caption =
         shareText ||
-        `${title} — Your Normies are singing. Tune into the hive. #PixelSymphony #Normies`
+        `${title} — Your Normies are singing. Tune in. #PixelSymphony #Normies`
 
       const shared = await tryNativeShare(file, title, caption)
       if (!shared) {
@@ -107,7 +107,7 @@ export function BlipShare({
   function shareX() {
     const text = encodeURIComponent(
       shareText ||
-        `${title} — Your Normies are singing. Tune into the hive. #PixelSymphony #Normies`,
+        `${title} — Your Normies are singing. Tune in. #PixelSymphony #Normies`,
     )
     const url = encodeURIComponent(
       typeof window !== "undefined"

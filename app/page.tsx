@@ -63,7 +63,7 @@ export default function HomePage() {
         </div>
 
         <p className="text-[10px] leading-relaxed text-muted-foreground/70">
-          Authentic pixels only · skins · share a Blip · tune into the hive
+          Authentic pixels only · skins · share a Blip · tune in
         </p>
       </div>
     </main>

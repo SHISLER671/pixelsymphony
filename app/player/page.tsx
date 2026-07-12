@@ -134,7 +134,7 @@ function PlayerPageInner() {
           <p className="text-xs text-muted-foreground">
             This wallet doesn&apos;t own Normies and no Delegate.xyz grants
             resolved (checked v1 + v2 registry for ALL / collection / token).
-            Try sample mode to hear the hive.
+            Try sample mode to hear them sing.
           </p>
           {delegateHints.length > 0 && (
             <p className="text-[10px] text-muted-foreground/80">
