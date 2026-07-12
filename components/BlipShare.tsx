@@ -9,17 +9,12 @@ import {
   downloadBlob,
   openBlankTabForShare,
   openXCompose,
-  recordPixelVideoBlip,
   tryNativeShare,
 } from "@/lib/blip-export"
+import { createTwitterBlip, X_VIDEO_MS } from "@/lib/twitter-mp4"
 
 /** Offline WAV render length (Save Blip) */
 const WAV_DURATION_MS = 20_000
-/**
- * X video guidance: short clips work best; keep under common 2:20 / size limits.
- * 12s is a snappy Blip within help.x.com video norms (MP4/H.264 preferred).
- */
-const X_VIDEO_MS = 12_000
 
 export function BlipShare({
   disabled,
@@ -78,22 +73,17 @@ export function BlipShare({
 
   /**
    * Share on X:
-   * 1) Immediately open a tab (user gesture) → prefilled compose (like before)
-   * 2) Record short pixel+audio video in the background
-   * 3) Download the file so the user can attach it on X
-   *
-   * X web intent cannot auto-attach media — only text/url.
-   * Native share is optional on mobile after the tab is opened.
+   * 1) Open prefilled compose immediately (user gesture / popup-safe)
+   * 2) Record upscaled pixel canvas + audio
+   * 3) Transcode to real H.264+AAC MP4 (what X accepts)
+   * 4) Download MP4 for attach on the open compose tab
    */
   async function shareOnX() {
     if (disabled || busy) return
 
-    // Synchronous with the click → avoids popup blockers after 12s capture
     const xTab = openBlankTabForShare()
     const pageUrl =
       typeof window !== "undefined" ? window.location.href : undefined
-
-    // Navigate the reserved tab to compose ASAP with prefilled text
     openXCompose(defaultShareText, pageUrl, xTab)
 
     setBusy(true)
@@ -111,52 +101,44 @@ export function BlipShare({
       await audio.ensureRecordingTap()
       await audio.play()
 
-      toast.message("Recording video Blip…", {
-        description: `${X_VIDEO_MS / 1000}s · will download so you can attach on X`,
+      toast.message("Building X video…", {
+        description: `Recording ${X_VIDEO_MS / 1000}s, then encoding H.264 + AAC MP4`,
       })
 
       const audioStream = audio.getRecordingStream()
-      const { blob, filename, twitterSafe } = await recordPixelVideoBlip({
-        canvas,
+      const { blob, filename } = await createTwitterBlip({
+        sourceCanvas: canvas,
         audioStream,
         durationMs: X_VIDEO_MS,
-        fps: 30,
+        onStatus: (msg) => {
+          toast.message("Building X video…", { description: msg })
+        },
       })
 
       downloadBlob(blob, filename)
 
-      // Mobile only: offer OS share sheet as an extra path (does not replace the tab)
       const isCoarse =
         typeof window !== "undefined" &&
         window.matchMedia?.("(pointer: coarse)").matches
       if (isCoarse) {
-        const file = new File([blob], filename, {
-          type:
-            blob.type ||
-            (filename.endsWith(".mp4") ? "video/mp4" : "video/webm"),
-        })
+        const file = new File([blob], filename, { type: "video/mp4" })
         void tryNativeShare(file, title, defaultShareText)
       }
 
-      // Keep compose tab focused if still open
       openXCompose(defaultShareText, pageUrl, xTab)
 
-      toast.success(
-        twitterSafe ? "MP4 downloaded — attach it on X" : "Video downloaded — attach it on X",
-        {
-          description: twitterSafe
-            ? "X compose is open with your text. Use media → pick the Blip file."
-            : "Compose is open. This browser saved WebM (not fake MP4). Prefer Safari for H.264+AAC MP4.",
-        },
-      )
+      toast.success("X-ready MP4 downloaded", {
+        description:
+          "Compose is open with your text — attach the .mp4 (H.264 + AAC).",
+      })
     } catch (e) {
       console.error(e)
       openXCompose(defaultShareText, pageUrl, xTab)
-      toast.error("Video Blip failed", {
+      toast.error("Video encode failed", {
         description:
           e instanceof Error
-            ? `${e.message} — X compose still opened with your text.`
-            : "X compose still opened with your text.",
+            ? `${e.message} — X is open with text; try Save Blip (.wav) or Safari.`
+            : "X is open with text only.",
       })
     } finally {
       setBusy(false)
@@ -167,7 +149,7 @@ export function BlipShare({
   function shareTikTokHint() {
     toast.message("TikTok", {
       description:
-        "Save Blip (.wav) or Share on X (video), then upload the file in the TikTok app.",
+        "Use Share on X to get an MP4, or Save Blip for WAV, then upload in TikTok.",
     })
   }
 
@@ -190,7 +172,7 @@ export function BlipShare({
           onClick={shareOnX}
         >
           <Share2 className="size-3.5" />
-          {busyKind === "x" ? "Recording…" : "Share on X"}
+          {busyKind === "x" ? "Encoding…" : "Share on X"}
         </button>
         <button
           type="button"
@@ -202,9 +184,9 @@ export function BlipShare({
       </div>
       <p className="text-[10px] leading-relaxed text-muted-foreground">
         <span className="text-foreground/80">Share on X</span> opens compose
-        with your text right away, then downloads a short video to attach (X web
-        cannot auto-attach files).{" "}
-        <span className="text-foreground/80">Save Blip</span> = WAV only.
+        with your text, then downloads a real{" "}
+        <span className="text-foreground/80">H.264 + AAC MP4</span> (720p) so X
+        can process it. First encode may download a small encoder (~30s).
       </p>
     </div>
   )
