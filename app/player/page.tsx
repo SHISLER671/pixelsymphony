@@ -8,7 +8,7 @@ import { useAccount } from "wagmi"
 import { ConnectWallet } from "@/components/ConnectWallet"
 import { LoadingIcon } from "@/components/LoadingIcon"
 import { Player } from "@/components/Player"
-import { resolveAccessibleNormies } from "@/lib/ownership"
+import { resolveAccessibleNormiesDetailed } from "@/lib/ownership"
 import { SAMPLE_NORMIE_IDS } from "@/lib/types"
 
 function PlayerPageInner() {
@@ -16,20 +16,28 @@ function PlayerPageInner() {
   const sampleMode = searchParams.get("sample") === "1"
   const { address, isConnected, isConnecting } = useAccount()
 
+  const [owned, setOwned] = useState<number[]>([])
+  const [delegated, setDelegated] = useState<number[]>([])
   const [ids, setIds] = useState<number[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [delegateHints, setDelegateHints] = useState<string[]>([])
 
   useEffect(() => {
     if (sampleMode) {
       setIds([...SAMPLE_NORMIE_IDS])
+      setOwned([...SAMPLE_NORMIE_IDS])
+      setDelegated([])
       setLoading(false)
       setError(null)
+      setDelegateHints([])
       return
     }
 
     if (!isConnected || !address) {
       setIds([])
+      setOwned([])
+      setDelegated([])
       setLoading(false)
       return
     }
@@ -38,15 +46,21 @@ function PlayerPageInner() {
     setLoading(true)
     setError(null)
 
-    resolveAccessibleNormies(address)
-      .then((list) => {
-        if (!cancelled) setIds(list)
+    resolveAccessibleNormiesDetailed(address)
+      .then((result) => {
+        if (cancelled) return
+        setOwned(result.owned)
+        setDelegated(result.delegated)
+        setIds(result.all)
+        setDelegateHints(result.errors)
       })
       .catch((err) => {
         console.error(err)
         if (!cancelled) {
           setError("Could not load your Normies")
           setIds([])
+          setOwned([])
+          setDelegated([])
         }
       })
       .finally(() => {
@@ -95,8 +109,8 @@ function PlayerPageInner() {
             Connect to sing
           </h2>
           <p className="text-xs text-muted-foreground">
-            Token-gated for Normie holders and Delegate.xyz hot wallets. Or try
-            sample mode with live on-chain demo Normies.
+            Token-gated for Normie holders and Delegate.xyz hot wallets (v1 +
+            v2). Or try sample mode with live on-chain demo Normies.
           </p>
           <div className="flex flex-col items-center gap-3">
             <ConnectWallet />
@@ -118,19 +132,31 @@ function PlayerPageInner() {
             No Normies found
           </h2>
           <p className="text-xs text-muted-foreground">
-            This wallet doesn&apos;t own or control any Normies (including
-            Delegate.xyz). Try sample mode to hear the hive.
+            This wallet doesn&apos;t own Normies and no Delegate.xyz grants
+            resolved (checked v1 + v2 registry for ALL / collection / token).
+            Try sample mode to hear the hive.
           </p>
+          {delegateHints.length > 0 && (
+            <p className="text-[10px] text-muted-foreground/80">
+              {delegateHints.join(" · ")}
+            </p>
+          )}
           <Link href="/player?sample=1" className="btn-retro btn-retro-active">
             Sample mode
           </Link>
         </div>
       ) : (
-        <Player
-          availableIds={ids}
-          initialSelected={ids.slice(0, 1)}
-          sampleMode={false}
-        />
+        <>
+          <p className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+            Owned {owned.length} · Delegated {delegated.length} · Total{" "}
+            {ids.length}
+          </p>
+          <Player
+            availableIds={ids}
+            initialSelected={ids.slice(0, 1)}
+            sampleMode={false}
+          />
+        </>
       )}
     </main>
   )

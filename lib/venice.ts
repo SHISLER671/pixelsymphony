@@ -3,7 +3,6 @@ import { buildFallbackScore } from "@/lib/fallback"
 
 export function buildTranslatePrompt(voices: NormieVoiceInput[]): string {
   const compact = voices.map((v) => {
-    // Compress pixels: density + 8x8 downsample for prompt size
     let on = 0
     for (let i = 0; i < v.pixels.length; i++) if (v.pixels[i] === "1") on++
     const grid: string[] = []
@@ -34,23 +33,29 @@ export function buildTranslatePrompt(voices: NormieVoiceInput[]): string {
     }
   })
 
-  return `You are PixelSymphony, a translator of on-chain Normie bitmap art into synthwave scores.
+  return `You are PixelSymphony, a translator of on-chain Normie bitmap art into 80s chiptune / synthwave LOOPS (not drones).
 
 INPUT (authentic on-chain data only — never invent traits or pixels):
 ${JSON.stringify(compact, null, 2)}
 
-RULES:
-1. Music MUST derive from pixel density, spatial structure (sketch), and trait labels.
-2. Solo voice is complete — one Normie needs a finished loopable melody.
-3. Up to 3 voices: primary, harmony, counter with distinct registers.
-4. Keep patterns loopable ~4–8 bars (32 note slots).
-5. notes use scientific pitch (C4, D#3) or "rest". durations are seconds (0.125, 0.25, 0.5, 1).
-6. synth is one of: square, sawtooth, triangle, pulse.
-7. scale is one of: major, minor, pentatonic, phrygian, wholetone.
-8. synopsis: 1–2 sentences explaining the mapping in plain language.
-9. source must be exactly "venice".
+HARD RULES:
+1. This must sound like a SHORT SONG phrase, not a single sustained beep.
+2. Use 32 steps of mostly 16th notes. Include RESTS ("rest") — silence is part of the music.
+3. Melodies must MOVE: no more than 2 identical pitches in a row. Use leaps and steps from the pixel sketch contour.
+4. Solo Normie: emit TWO parts — a lead (role primary) AND a bass (role counter) from the same NFT so solo is complete.
+5. Multiple Normies: distinct registers (lead mid, harmony high, counter/bass low).
+6. Trait mapping (audible):
+   - Type → scale (Human minor, Cat pentatonic, Alien wholetone, Agent phrygian)
+   - Expression → rests & staccato (angry = short punchy; friendly = smoother; sad = more space)
+   - Age → tempo bias
+   - Eyes → filterHz (shades darker/lower, laser brighter/higher)
+7. notes: scientific pitch (C4, D#3) or "rest". durations: seconds matching ~16th–8th at the bpm (e.g. 0.1–0.25 at 110 BPM).
+8. synth: square | sawtooth | triangle | pulse
+9. scale: major | minor | pentatonic | phrygian | wholetone
+10. synopsis: 1–2 sentences naming which traits drove the sound.
+11. source must be exactly "venice".
 
-Return ONLY valid JSON matching this schema (no markdown):
+Return ONLY valid JSON (no markdown):
 {
   "bpm": number,
   "root": string,
@@ -71,7 +76,6 @@ Return ONLY valid JSON matching this schema (no markdown):
 export function parseVoiceScore(raw: string): VoiceScore | null {
   try {
     let text = raw.trim()
-    // Strip markdown fences if present
     if (text.startsWith("```")) {
       text = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "")
     }
@@ -88,7 +92,6 @@ export function parseVoiceScore(raw: string): VoiceScore | null {
     for (const p of data.parts) {
       if (!Array.isArray(p.notes) || !Array.isArray(p.durations)) return null
       if (p.notes.length === 0) return null
-      // Align lengths
       const n = Math.min(p.notes.length, p.durations.length)
       p.notes = p.notes.slice(0, n)
       p.durations = p.durations.slice(0, n)
@@ -115,11 +118,19 @@ export async function translateToScore(
     if (res.ok) {
       const data = (await res.json()) as { score?: VoiceScore; error?: string }
       if (data.score?.parts?.length) {
-        return { ...data.score, source: "venice" }
+        // Prefer fallback if Venice returned a near-drone (too few unique pitches)
+        const unique = new Set(
+          data.score.parts.flatMap((p) =>
+            p.notes.filter((n) => n && n !== "rest"),
+          ),
+        )
+        if (unique.size >= 3) {
+          return { ...data.score, source: "venice" }
+        }
       }
     }
   } catch {
-    // network / timeout → fallback
+    // network → fallback
   }
 
   return buildFallbackScore(voices)

@@ -11,6 +11,8 @@ let currentScore: VoiceScore | null = null
 let sequences: any[] = []
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let synths: any[] = []
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let fxNodes: any[] = []
 let mediaDest: MediaStreamAudioDestinationNode | null = null
 let recorder: MediaRecorder | null = null
 let recordChunks: Blob[] = []
@@ -28,34 +30,37 @@ function createSynth(
   type: SynthType,
   filterHz: number,
   gain: number,
+  dest: InstanceType<ToneModule["Gain"]>,
 ) {
-  const filter = new T.Filter(filterHz, "lowpass")
-  const vol = new T.Volume(T.gainToDb(Math.max(0.01, gain)))
+  const filter = new T.Filter({
+    frequency: filterHz,
+    type: "lowpass",
+    Q: 1.2,
+  })
+  const vol = new T.Volume(T.gainToDb(Math.max(0.01, Math.min(1, gain))))
   const oscType =
     type === "pulse" ? "square" : (type as "square" | "sawtooth" | "triangle")
 
+  // Chiptune envelopes — snappy, not a sustained hum
   const synth = new T.MonoSynth({
     oscillator: { type: oscType },
     envelope: {
-      attack: 0.02,
-      decay: 0.15,
-      sustain: 0.35,
-      release: 0.35,
+      attack: 0.005,
+      decay: 0.12,
+      sustain: 0.08,
+      release: 0.08,
     },
     filterEnvelope: {
-      attack: 0.01,
-      decay: 0.2,
-      sustain: 0.2,
-      release: 0.4,
-      baseFrequency: filterHz * 0.5,
-      octaves: 2,
+      attack: 0.005,
+      decay: 0.08,
+      sustain: 0.15,
+      release: 0.1,
+      baseFrequency: Math.max(120, filterHz * 0.35),
+      octaves: 2.5,
     },
   })
 
-  synth.chain(filter, vol, T.getDestination())
-  if (mediaDest) {
-    vol.connect(mediaDest as unknown as import("tone").ToneAudioNode)
-  }
+  synth.chain(filter, vol, dest)
 
   return {
     triggerAttackRelease: (
@@ -65,17 +70,29 @@ function createSynth(
     ) => {
       if (note === "rest" || !note) return
       try {
-        synth.triggerAttackRelease(note, duration, time)
+        // Cap note length so mono voice doesn't drone
+        const dur = Math.min(duration, 0.35)
+        synth.triggerAttackRelease(note, dur, time)
       } catch {
-        // invalid note names are skipped
+        // invalid note skipped
+      }
+    },
+    releaseAll: (time?: number) => {
+      try {
+        synth.triggerRelease(time)
+      } catch {
+        /* ignore */
       }
     },
     dispose: () => {
-      synth.dispose()
-      filter.dispose()
-      vol.dispose()
+      try {
+        synth.dispose()
+        filter.dispose()
+        vol.dispose()
+      } catch {
+        /* ignore */
+      }
     },
-    volume: vol,
   }
 }
 
@@ -96,41 +113,75 @@ export async function loadScore(score: VoiceScore): Promise<void> {
 
   currentScore = score
   T.Transport.bpm.value = score.bpm
+  T.Transport.swing = 0
   T.getDestination().volume.value = volumeDb
 
-  // Media stream tap for recording
+  // Light bus FX for glue (not muddy)
+  const bus = new T.Gain(1)
+  const delay = new T.FeedbackDelay({
+    delayTime: "8n",
+    feedback: 0.12,
+    wet: 0.12,
+  })
+  bus.chain(delay, T.getDestination())
+  fxNodes.push(bus, delay)
+
   try {
     const ctx = T.getContext().rawContext as AudioContext
     mediaDest = ctx.createMediaStreamDestination()
+    // Tap master for recording when possible
+    try {
+      delay.connect(mediaDest as unknown as import("tone").ToneAudioNode)
+    } catch {
+      /* optional */
+    }
   } catch {
     mediaDest = null
   }
 
   for (const part of score.parts) {
-    const s = createSynth(T, part.synth, part.filterHz, part.gain)
+    const s = createSynth(T, part.synth, part.filterHz, part.gain, bus)
     synths.push(s)
 
     let t = 0
     const events: Array<{ time: number; note: string; dur: number }> = []
     for (let i = 0; i < part.notes.length; i++) {
-      const dur = part.durations[i] ?? 0.25
-      events.push({ time: t, note: part.notes[i], dur })
-      t += dur
+      const dur = Math.max(0.03, part.durations[i] ?? 0.1)
+      const note = part.notes[i]
+      if (note && note !== "rest") {
+        events.push({ time: t, note, dur })
+      }
+      t += Math.max(0.03, part.durations[i] ?? 0.1)
     }
 
-    const seq = new T.Part(
-      (time, ev) => {
-        if (!ev || typeof ev === "number") return
-        const event = ev as { note: string; dur: number }
-        s.triggerAttackRelease(event.note, event.dur, time)
-      },
-      events.map((e) => ({ time: e.time, note: e.note, dur: e.dur })),
-    )
+    // Align all parts to the same loop length (max part length)
+    const loopEnd = t || (60 / score.bpm) * 8
+
+    if (events.length === 0) continue
+
+    const seq = new T.Part((time, ev) => {
+      if (!ev || typeof ev === "number") return
+      const event = ev as { note: string; dur: number }
+      s.triggerAttackRelease(event.note, event.dur, time)
+    }, events)
 
     seq.loop = true
-    seq.loopEnd = t || 8
+    seq.loopEnd = loopEnd
     seq.start(0)
     sequences.push(seq)
+  }
+
+  // Normalize loop ends to longest sequence so multi-parts stay locked
+  let maxLoop = 0
+  for (const seq of sequences) {
+    if (typeof seq.loopEnd === "number" && seq.loopEnd > maxLoop) {
+      maxLoop = seq.loopEnd
+    }
+  }
+  if (maxLoop > 0) {
+    for (const seq of sequences) {
+      seq.loopEnd = maxLoop
+    }
   }
 }
 
@@ -144,16 +195,29 @@ export async function play(): Promise<void> {
 export async function pause(): Promise<void> {
   const T = await getTone()
   T.Transport.pause()
+  for (const s of synths) {
+    try {
+      s.releaseAll?.()
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 export function stop(): void {
   if (!tone) return
+  for (const s of synths) {
+    try {
+      s.releaseAll?.()
+    } catch {
+      /* ignore */
+    }
+  }
   tone.Transport.stop()
   tone.Transport.position = 0
 }
 
 export function setVolume(linear: number): void {
-  // linear 0–1
   volumeDb = linear <= 0 ? -60 : 20 * Math.log10(linear) - 6
   if (tone) {
     tone.getDestination().volume.value = volumeDb
@@ -164,7 +228,6 @@ export function getTransportProgress(): number {
   if (!tone || !currentScore) return 0
   try {
     const pos = tone.Transport.seconds
-    // Approximate loop length from primary part
     const part = currentScore.parts[0]
     if (!part) return 0
     const len = part.durations.reduce((a, b) => a + b, 0) || 8
@@ -179,7 +242,6 @@ export async function startRecording(): Promise<void> {
     const T = await getTone()
     const ctx = T.getContext().rawContext as AudioContext
     mediaDest = ctx.createMediaStreamDestination()
-    // Re-route would require reload — capture destination via monitor when possible
   }
   if (!mediaDest) throw new Error("Recording not available in this browser")
 
@@ -228,6 +290,14 @@ function disposeGraph(): void {
     }
   }
   synths = []
+  for (const n of fxNodes) {
+    try {
+      n.dispose()
+    } catch {
+      /* ignore */
+    }
+  }
+  fxNodes = []
 }
 
 export function disposeAudio(): void {
