@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server"
 
 import { buildFallbackScore } from "@/lib/fallback"
 import type { NormieVoiceInput, VoiceScore } from "@/lib/types"
+import {
+  hasVeniceKey,
+  veniceChatCompletions,
+} from "@/lib/venice-client"
 import { buildTranslatePrompt, parseVoiceScore } from "@/lib/venice"
 
 export async function POST(req: NextRequest) {
@@ -20,20 +24,10 @@ export async function POST(req: NextRequest) {
     )
   }
   if (voices.length > 3) {
-    return NextResponse.json(
-      { error: "Max 3 Normies" },
-      { status: 400 },
-    )
+    return NextResponse.json({ error: "Max 3 Normies" }, { status: 400 })
   }
 
-  const veniceKey = (
-    process.env.VENICE_API_KEY ||
-    process.env.VENICE_INFERENCE_KEY ||
-    process.env.NEXT_PUBLIC_VENICE_API_KEY ||
-    ""
-  ).trim()
-
-  if (!veniceKey) {
+  if (!hasVeniceKey()) {
     const score = buildFallbackScore(voices)
     return NextResponse.json({ score, reason: "no_venice_key" })
   }
@@ -42,42 +36,18 @@ export async function POST(req: NextRequest) {
 
   try {
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 15_000)
+    const timeout = setTimeout(() => controller.abort(), 30_000)
 
-    const res = await fetch("https://api.venice.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${veniceKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "hermes-3-llama-3.1-405b",
-        messages: [{ role: "user", content: prompt }],
-        max_tokens: 2000,
-        temperature: 0.4,
-      }),
+    const result = await veniceChatCompletions({
+      messages: [{ role: "user", content: prompt }],
+      max_tokens: 2000,
+      temperature: 0.4,
       signal: controller.signal,
     })
 
     clearTimeout(timeout)
 
-    if (!res.ok) {
-      const errText = await res.text().catch(() => "")
-      console.error("[translate] Venice error", res.status, errText.slice(0, 200))
-      const score = buildFallbackScore(voices)
-      return NextResponse.json({
-        score,
-        reason: `venice_${res.status}`,
-      })
-    }
-
-    const data = await res.json()
-    const content =
-      data.choices?.[0]?.message?.content ??
-      data.choices?.[0]?.text ??
-      ""
-
-    const parsed: VoiceScore | null = parseVoiceScore(content)
+    const parsed: VoiceScore | null = parseVoiceScore(result.content)
     if (!parsed) {
       const score = buildFallbackScore(voices)
       return NextResponse.json({ score, reason: "invalid_json" })
@@ -87,9 +57,12 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error("[translate] failed", err)
     const score = buildFallbackScore(voices)
-    return NextResponse.json({
-      score,
-      reason: "timeout_or_network",
-    })
+    const message = err instanceof Error ? err.message : String(err)
+    const reason = message.includes("abort")
+      ? "timeout_or_network"
+      : message.startsWith("Venice chat/completions")
+        ? `venice_error`
+        : "timeout_or_network"
+    return NextResponse.json({ score, reason })
   }
 }
