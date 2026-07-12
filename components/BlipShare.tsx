@@ -187,9 +187,9 @@ export function BlipShare({
       </div>
       <p className="text-[10px] leading-relaxed text-muted-foreground">
         <span className="text-foreground/80">Share on X</span> opens compose
-        with your text, then downloads a real{" "}
-        <span className="text-foreground/80">H.264 + AAC MP4</span> (720p) so X
-        can process it. First encode may download a small encoder (~30s).
+        with your text, then encodes a real{" "}
+        <span className="text-foreground/80">H.264 MP4</span> (720p) in the
+        browser for X. Encoding takes about the clip length (~12s).
       </p>
     </div>
   )
