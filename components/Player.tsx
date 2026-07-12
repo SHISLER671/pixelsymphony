@@ -1,6 +1,18 @@
 "use client"
 
-import { Pause, Play, Square, Volume2 } from "lucide-react"
+import {
+  Disc3,
+  Info,
+  ListMusic,
+  Pause,
+  Play,
+  Radio,
+  Share2,
+  Square,
+  Volume2,
+  Wand2,
+} from "lucide-react"
+import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
@@ -16,8 +28,62 @@ import { composeScore } from "@/lib/compose"
 import * as audio from "@/lib/audio"
 import { fetchNormieVoices } from "@/lib/normies"
 import type { NormieVoiceInput, SkinId, VoiceScore } from "@/lib/types"
+import { cn } from "@/lib/utils"
 
 const SKIN_KEY = "pixelsymphony-skin"
+
+type PanelId = "playlist" | "controls" | "synopsis" | "skins" | "signal" | "share"
+
+const PANEL_META: {
+  id: PanelId
+  label: string
+  hint: string
+  icon: React.ReactNode
+  side: "left" | "right" | "bottom"
+}[] = [
+  {
+    id: "playlist",
+    label: "Playlist",
+    hint: "Pick Normies",
+    icon: <ListMusic className="size-3.5" />,
+    side: "left",
+  },
+  {
+    id: "controls",
+    label: "Transport",
+    hint: "Play / Vol",
+    icon: <Radio className="size-3.5" />,
+    side: "bottom",
+  },
+  {
+    id: "synopsis",
+    label: "Synopsis",
+    hint: "Now playing",
+    icon: <Disc3 className="size-3.5" />,
+    side: "right",
+  },
+  {
+    id: "skins",
+    label: "Skins",
+    hint: "Look & feel",
+    icon: <Wand2 className="size-3.5" />,
+    side: "right",
+  },
+  {
+    id: "signal",
+    label: "Signal",
+    hint: "How it works",
+    icon: <Info className="size-3.5" />,
+    side: "left",
+  },
+  {
+    id: "share",
+    label: "Share",
+    hint: "Blip / social",
+    icon: <Share2 className="size-3.5" />,
+    side: "bottom",
+  },
+]
 
 export function Player({
   availableIds,
@@ -28,6 +94,7 @@ export function Player({
   initialSelected?: number[]
   sampleMode?: boolean
 }) {
+  const router = useRouter()
   const [skin, setSkin] = useState<SkinId>("classic")
   const [selected, setSelected] = useState<number[]>(initialSelected)
   const [voices, setVoices] = useState<NormieVoiceInput[]>([])
@@ -37,13 +104,18 @@ export function Player({
   const [progress, setProgress] = useState(0)
   const [volume, setVolume] = useState(0.7)
   const [needsGesture, setNeedsGesture] = useState(true)
+  const [openPanel, setOpenPanel] = useState<PanelId | null>("controls")
+  const [menuHint, setMenuHint] = useState(true)
   const rafRef = useRef<number | null>(null)
   const visualCanvasRef = useRef<HTMLCanvasElement | null>(null)
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem(SKIN_KEY) as SkinId | null
-      if (saved && ["classic", "minimal", "crt", "pixel-forest"].includes(saved)) {
+      if (
+        saved &&
+        ["classic", "minimal", "crt", "pixel-forest"].includes(saved)
+      ) {
         setSkin(saved)
       }
     } catch {
@@ -64,7 +136,6 @@ export function Player({
     audio.setVolume(volume)
   }, [volume])
 
-  // progress loop
   useEffect(() => {
     if (!playing) {
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
@@ -80,7 +151,6 @@ export function Player({
     }
   }, [playing])
 
-  // resume audio on visibility
   useEffect(() => {
     const onVis = () => {
       if (document.visibilityState === "visible" && playing) {
@@ -96,6 +166,11 @@ export function Player({
       audio.disposeAudio()
     }
   }, [])
+
+  // Dismiss discovery hint after first panel interaction
+  useEffect(() => {
+    if (openPanel && openPanel !== "controls") setMenuHint(false)
+  }, [openPanel])
 
   const loadVoices = useCallback(async (ids: number[]) => {
     if (ids.length === 0) {
@@ -113,14 +188,9 @@ export function Player({
       setScore(s)
       await audio.loadScore(s)
       if (ids.length > 1) {
-        toast.message(
-          ids.length === 1
-            ? "Voice ready"
-            : `Forest mix · ${ids.length} Normies`,
-          {
-            description: `${s.parts.length} layers from live pixels + traits`,
-          },
-        )
+        toast.message(`Forest mix · ${ids.length} Normies`, {
+          description: `${s.parts.length} layers from live pixels + traits`,
+        })
       }
     } catch (err) {
       console.error(err)
@@ -163,6 +233,16 @@ export function Player({
     setProgress(0)
   }
 
+  function togglePanel(id: PanelId) {
+    setOpenPanel((cur) => (cur === id ? null : id))
+    setMenuHint(false)
+  }
+
+  function handleClose() {
+    handleStop()
+    router.push("/")
+  }
+
   const statusLabel = loading
     ? "OPENING…"
     : playing
@@ -176,210 +256,324 @@ export function Player({
       ? "No track loaded"
       : voices.length === 1
         ? (voices[0]?.name ?? `Normie #${voices[0]?.tokenId}`)
-        : `Hive · ${voices.length} Normies`
+        : `Ensemble · ${voices.length} Normies`
+
+  const activeMeta = PANEL_META.find((p) => p.id === openPanel)
 
   return (
-    <div className="wmp-player mx-auto w-full max-w-3xl">
-      {/* Outer Win98 chrome + CRT glass */}
-      <div className="wmp-shell">
+    <div className="ps-stage-root mx-auto w-full max-w-5xl">
+      <div className="wmp-shell ps-stage-shell">
         <div className="wmp-crt-glow" aria-hidden />
         <div className="wmp-scanlines" aria-hidden />
 
-        {/* Classic title bar */}
-        <header className="wmp-titlebar">
+        {/* —— Title bar —— */}
+        <header className="wmp-titlebar ps-titlebar">
           <div className="wmp-titlebar-scan" aria-hidden />
           <div className="wmp-titlebar-inner">
-            <div className="wmp-titlebar-left">
+            <button
+              type="button"
+              className="wmp-titlebar-left ps-title-hit"
+              onClick={() => togglePanel("signal")}
+              title="About the signal path"
+            >
               <span className="wmp-app-icon" aria-hidden>
                 ▣
               </span>
-              <div className="min-w-0">
+              <div className="min-w-0 text-left">
                 <h1 className="wmp-title">PixelSymphony</h1>
                 <p className="wmp-subtitle">
                   {sampleMode
                     ? "Sample mode · live on-chain data"
                     : "Token-gated player"}
+                  {menuHint ? " · click panels to explore" : ""}
                 </p>
               </div>
-            </div>
+            </button>
+
             <div className="wmp-titlebar-right">
-              <div className="wmp-skin-slot">
-                <SkinSwitcher value={skin} onChange={setSkin} />
-              </div>
-              <div className="wmp-window-controls" aria-hidden>
-                <span className="wmp-win-btn">_</span>
-                <span className="wmp-win-btn">□</span>
-                <span className="wmp-win-btn wmp-win-btn-close">×</span>
+              <div className="wmp-window-controls">
+                <button
+                  type="button"
+                  className="wmp-win-btn"
+                  title="Minimize (decorative)"
+                  onClick={() =>
+                    toast.message("Minimized… not really", {
+                      description: "Classic fake chrome. Try the drawer buttons!",
+                    })
+                  }
+                >
+                  _
+                </button>
+                <button
+                  type="button"
+                  className="wmp-win-btn"
+                  title="Maximize (decorative)"
+                  onClick={() =>
+                    toast.message("Already maximized", {
+                      description: "The stage is the whole world.",
+                    })
+                  }
+                >
+                  □
+                </button>
+                <button
+                  type="button"
+                  className="wmp-win-btn wmp-win-btn-close"
+                  title="Close — back to landing"
+                  onClick={handleClose}
+                >
+                  ×
+                </button>
               </div>
             </div>
           </div>
         </header>
 
-        {/* Body panels */}
-        <div className="wmp-body">
-          {/* Playlist / hive select */}
-          <section className="wmp-panel">
-            <div className="wmp-panel-label">
-              <span>Playlist</span>
-              <span className="wmp-panel-hint">select voices</span>
-            </div>
-            <div className="wmp-panel-inset">
-              <NormiePicker
-                availableIds={availableIds}
-                selected={selected}
-                onChange={setSelected}
-                disabled={loading}
-              />
-            </div>
-          </section>
+        {/* —— Stage body —— */}
+        <div className="ps-stage-body">
+          {/* Drawer rail */}
+          <nav className="ps-drawer-rail" aria-label="Player panels">
+            {PANEL_META.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                className={cn(
+                  "ps-drawer-btn",
+                  openPanel === p.id && "ps-drawer-btn-on",
+                )}
+                onClick={() => togglePanel(p.id)}
+                title={`${p.label} — ${p.hint}`}
+              >
+                {p.icon}
+                <span className="ps-drawer-btn-label">{p.label}</span>
+              </button>
+            ))}
+          </nav>
 
-          {/* Visualization “screen” */}
-          <section className="wmp-panel wmp-viz-panel">
-            <div className="wmp-panel-label">
-              <span>Visualization</span>
-              <span className="wmp-panel-hint">
-                {playing ? "// LIVE" : "// STANDBY"}
-              </span>
-            </div>
-            <div className="wmp-screen">
+          {/* Center stage */}
+          <div className="ps-stage-center">
+            <div className="ps-stage-screen">
               <div className="wmp-screen-scan" aria-hidden />
               <div className="wmp-screen-vignette" aria-hidden />
-              {loading ? (
-                <LoadingIcon
-                  label={
-                    selected.length > 6
-                      ? `Tuning the forest (${selected.length} voices)…`
-                      : "Decoding pixels into song…"
-                  }
-                />
-              ) : (
-                <Visualizer
-                  voices={voices}
-                  skin={skin}
-                  progress={progress}
-                  canvasRef={visualCanvasRef}
-                />
-              )}
-            </div>
-            {/* Seek / progress like WMP timeline */}
-            <div className="wmp-seek">
-              <div className="wmp-seek-track">
-                <div
-                  className="wmp-seek-fill"
-                  style={{ width: `${Math.round(progress * 100)}%` }}
-                />
+              <div className="ps-stage-viz">
+                {loading ? (
+                  <LoadingIcon
+                    label={
+                      selected.length > 6
+                        ? `Tuning the forest (${selected.length} voices)…`
+                        : "Decoding pixels into song…"
+                    }
+                  />
+                ) : (
+                  <Visualizer
+                    voices={voices}
+                    skin={skin}
+                    progress={progress}
+                    canvasRef={visualCanvasRef}
+                    className="ps-viz-fill"
+                  />
+                )}
               </div>
-              <span className="wmp-seek-pct">{Math.round(progress * 100)}%</span>
+              <div className="ps-stage-live" data-on={playing ? "1" : "0"}>
+                {playing ? "● LIVE" : "○ STANDBY"}
+              </div>
             </div>
-          </section>
 
-          {/* Transport */}
-          <section className="wmp-panel">
-            <div className="wmp-panel-label">
-              <span>Transport</span>
-              <span className="wmp-panel-hint">{statusLabel}</span>
-            </div>
-            <div className="wmp-transport bevel-inset">
-              <div className="flex flex-wrap items-center gap-2">
+            {/* Always-visible mini transport + seek */}
+            <div className="ps-dock">
+              <div className="ps-dock-transport">
                 {!playing ? (
                   <button
                     type="button"
-                    className="btn-retro btn-retro-active wmp-transport-btn inline-flex items-center gap-2"
+                    className="btn-retro btn-retro-active ps-big-play"
                     disabled={!score || loading}
                     onClick={handlePlay}
                   >
-                    <Play className="size-3.5 fill-current" />
+                    <Play className="size-4 fill-current" />
                     Play
                   </button>
                 ) : (
                   <button
                     type="button"
-                    className="btn-retro wmp-transport-btn inline-flex items-center gap-2"
+                    className="btn-retro ps-big-play"
                     onClick={handlePause}
                   >
-                    <Pause className="size-3.5" />
+                    <Pause className="size-4" />
                     Pause
                   </button>
                 )}
                 <button
                   type="button"
-                  className="btn-retro wmp-transport-btn inline-flex items-center gap-2"
+                  className="btn-retro"
                   disabled={!score}
                   onClick={handleStop}
                 >
                   <Square className="size-3 fill-current" />
-                  Stop
+                </button>
+                <button
+                  type="button"
+                  className={cn(
+                    "btn-retro",
+                    openPanel === "controls" && "btn-retro-active",
+                  )}
+                  onClick={() => togglePanel("controls")}
+                  title="More controls"
+                >
+                  <Volume2 className="size-3.5" />
                 </button>
               </div>
-              <div className="wmp-volume flex flex-1 items-center gap-2">
-                <Volume2 className="size-3.5 shrink-0 text-muted-foreground" />
-                <span className="wmp-vol-label">Vol</span>
-                <Slider
-                  value={[volume]}
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  onValueChange={(v) => {
-                    const next = Array.isArray(v) ? v[0] : v
-                    setVolume(typeof next === "number" ? next : 0.7)
-                  }}
-                  className="w-full"
-                  aria-label="Volume"
-                />
+              <div className="wmp-seek ps-dock-seek">
+                <div className="wmp-seek-track">
+                  <div
+                    className="wmp-seek-fill"
+                    style={{ width: `${Math.round(progress * 100)}%` }}
+                  />
+                </div>
+                <span className="wmp-seek-pct">
+                  {Math.round(progress * 100)}%
+                </span>
               </div>
+              {needsGesture && score && (
+                <p className="ps-gesture-hint">
+                  Mobile: tap Play once to unlock audio
+                </p>
+              )}
             </div>
-            {needsGesture && score && (
-              <p className="mt-2 text-center text-[10px] text-muted-foreground">
-                Mobile: tap Play once to unlock audio (browser autoplay policy).
+
+            {menuHint && (
+              <p className="ps-discover-hint">
+                ✦ Click glowing tabs to unfold playlist, synopsis, skins & share
               </p>
             )}
-          </section>
+          </div>
 
-          {/* Synopsis */}
-          <section className="wmp-panel">
-            <div className="wmp-panel-label">
-              <span>Now Playing Info</span>
-              <span className="wmp-panel-hint">synopsis</span>
-            </div>
-            <div className="wmp-panel-inset">
-              <SynopsisPanel score={score} voices={voices} />
-            </div>
-          </section>
-
-          {/* How the voice is made */}
-          <section className="wmp-panel">
-            <div className="wmp-panel-label">
-              <span>Signal Path</span>
-              <span className="wmp-panel-hint">how you hear them</span>
-            </div>
-            <div className="wmp-panel-inset">
-              <HowItWorks />
-            </div>
-          </section>
-
-          {/* Share */}
-          <section className="wmp-panel">
-            <div className="wmp-panel-label">
-              <span>Media Library</span>
-              <span className="wmp-panel-hint">share blip</span>
-            </div>
-            <div className="wmp-panel-inset space-y-2">
-              <BlipShare
-                disabled={!score || loading}
-                getCanvas={() => visualCanvasRef.current}
-                title={
-                  voices.length === 1
-                    ? `${voices[0]?.name ?? "Normie"} · PixelSymphony`
-                    : `${voices.length} Normies · PixelSymphony`
-                }
-                shareText={
-                  voices.length
-                    ? `${voices.length === 1 ? voices[0]?.name : `${voices.length} Normies`} singing on PixelSymphony — tune in. #PixelSymphony #Normies`
-                    : undefined
-                }
-              />
-            </div>
-          </section>
+          {/* Slide-out panel */}
+          <aside
+            className={cn(
+              "ps-slide-panel",
+              openPanel && "ps-slide-panel-open",
+              activeMeta && `ps-slide-${activeMeta.side}`,
+            )}
+            aria-hidden={!openPanel}
+          >
+            {openPanel && (
+              <>
+                <div className="ps-slide-head">
+                  <div>
+                    <h2 className="ps-slide-title">
+                      {activeMeta?.label ?? "Panel"}
+                    </h2>
+                    <p className="ps-slide-hint">{activeMeta?.hint}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="wmp-win-btn wmp-win-btn-close"
+                    onClick={() => setOpenPanel(null)}
+                    title="Close panel"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="ps-slide-body">
+                  {openPanel === "playlist" && (
+                    <NormiePicker
+                      availableIds={availableIds}
+                      selected={selected}
+                      onChange={setSelected}
+                      disabled={loading}
+                    />
+                  )}
+                  {openPanel === "controls" && (
+                    <div className="space-y-4">
+                      <div className="wmp-transport bevel-inset !flex-col !items-stretch">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {!playing ? (
+                            <button
+                              type="button"
+                              className="btn-retro btn-retro-active inline-flex items-center gap-2"
+                              disabled={!score || loading}
+                              onClick={handlePlay}
+                            >
+                              <Play className="size-3.5 fill-current" />
+                              Play
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="btn-retro inline-flex items-center gap-2"
+                              onClick={handlePause}
+                            >
+                              <Pause className="size-3.5" />
+                              Pause
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="btn-retro inline-flex items-center gap-2"
+                            disabled={!score}
+                            onClick={handleStop}
+                          >
+                            <Square className="size-3 fill-current" />
+                            Stop
+                          </button>
+                          <span className="ml-auto text-[10px] uppercase tracking-wider text-muted-foreground">
+                            {statusLabel}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Volume2 className="size-3.5 shrink-0 text-muted-foreground" />
+                          <span className="wmp-vol-label">Vol</span>
+                          <Slider
+                            value={[volume]}
+                            min={0}
+                            max={1}
+                            step={0.01}
+                            onValueChange={(v) => {
+                              const next = Array.isArray(v) ? v[0] : v
+                              setVolume(typeof next === "number" ? next : 0.7)
+                            }}
+                            className="w-full"
+                            aria-label="Volume"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">
+                        Tip: double-click the stage title bar for signal path.
+                      </p>
+                    </div>
+                  )}
+                  {openPanel === "synopsis" && (
+                    <SynopsisPanel score={score} voices={voices} />
+                  )}
+                  {openPanel === "skins" && (
+                    <div className="space-y-3">
+                      <p className="text-xs text-muted-foreground">
+                        Switch the CRT look. Your pick is remembered.
+                      </p>
+                      <SkinSwitcher value={skin} onChange={setSkin} />
+                    </div>
+                  )}
+                  {openPanel === "signal" && <HowItWorks />}
+                  {openPanel === "share" && (
+                    <BlipShare
+                      disabled={!score || loading}
+                      getCanvas={() => visualCanvasRef.current}
+                      title={
+                        voices.length === 1
+                          ? `${voices[0]?.name ?? "Normie"} · PixelSymphony`
+                          : `${voices.length} Normies · PixelSymphony`
+                      }
+                      shareText={
+                        voices.length
+                          ? `${voices.length === 1 ? voices[0]?.name : `${voices.length} Normies`} singing on PixelSymphony — tune in. #PixelSymphony #Normies`
+                          : undefined
+                      }
+                    />
+                  )}
+                </div>
+              </>
+            )}
+          </aside>
         </div>
 
         {/* Status bar */}
@@ -398,6 +592,16 @@ export function Player({
           <span className="wmp-status-meta uppercase tracking-wider">
             {statusLabel}
           </span>
+          {openPanel && (
+            <>
+              <span className="wmp-status-sep" aria-hidden>
+                |
+              </span>
+              <span className="wmp-status-meta text-primary">
+                [{activeMeta?.label}]
+              </span>
+            </>
+          )}
         </footer>
       </div>
     </div>
