@@ -102,11 +102,13 @@ export function BlipShare({
       await audio.play()
 
       toast.message("Building X video…", {
-        description: `Recording ${X_VIDEO_MS / 1000}s, then encoding H.264 + AAC MP4`,
+        description: `${X_VIDEO_MS / 1000}s · real H.264 MP4 (not WebM)`,
       })
 
-      const audioStream = audio.getRecordingStream()
-      const { blob, filename } = await createTwitterBlip({
+      const audioStream =
+        (await audio.ensureRecordingTap()) || audio.getRecordingStream()
+
+      const { blob, filename, twitterSafe } = await createTwitterBlip({
         sourceCanvas: canvas,
         audioStream,
         durationMs: X_VIDEO_MS,
@@ -127,18 +129,19 @@ export function BlipShare({
 
       openXCompose(defaultShareText, pageUrl, xTab)
 
-      toast.success("X-ready MP4 downloaded", {
-        description:
-          "Compose is open with your text — attach the .mp4 (H.264 + AAC).",
-      })
+      toast.success(
+        twitterSafe ? "X-ready MP4 downloaded" : "Video downloaded",
+        {
+          description:
+            "Compose is open — attach the new .mp4 (H.264). First try can take ~15s.",
+        },
+      )
     } catch (e) {
       console.error(e)
       openXCompose(defaultShareText, pageUrl, xTab)
+      const msg = e instanceof Error ? e.message : "Unknown encode error"
       toast.error("Video encode failed", {
-        description:
-          e instanceof Error
-            ? `${e.message} — X is open with text; try Save Blip (.wav) or Safari.`
-            : "X is open with text only.",
+        description: `${msg} X still has your text — try Chrome/Edge or Save Blip (.wav).`,
       })
     } finally {
       setBusy(false)
