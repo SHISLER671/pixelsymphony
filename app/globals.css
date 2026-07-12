@@ -133,21 +133,26 @@
   }
 }
 
-/* 90s bevelled chrome */
+/* 90s bevelled chrome — stronger 3D edges */
 .bevel {
   border-style: solid;
-  border-width: 2px;
-  border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark)
-    var(--bevel-light);
-  background: linear-gradient(180deg, #2e2e2e 0%, #1a1a1a 100%);
+  border-width: 3px;
+  border-color: #6a6a6a #0a0a0a #0a0a0a #6a6a6a;
+  background: linear-gradient(180deg, #333333 0%, #1c1c1c 55%, #141414 100%);
+  box-shadow:
+    inset 1px 1px 0 #888888,
+    inset -1px -1px 0 #000000,
+    2px 2px 0 #000000;
 }
 
 .bevel-inset {
   border-style: solid;
-  border-width: 2px;
-  border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light)
-    var(--bevel-dark);
-  background: #0a0a0a;
+  border-width: 3px;
+  border-color: #050505 #555555 #555555 #050505;
+  background: #080808;
+  box-shadow:
+    inset 2px 2px 3px #000000,
+    inset -1px -1px 0 #3a3a3a;
 }
 
 [data-skin="minimal"] .bevel,
@@ -155,14 +160,14 @@
   border-width: 1px;
   border-color: var(--border);
   background: var(--card);
+  box-shadow: none;
 }
 
 .btn-retro {
   border-style: solid;
-  border-width: 2px;
-  border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark)
-    var(--bevel-light);
-  background: linear-gradient(180deg, #3a3a3a 0%, #1f1f1f 100%);
+  border-width: 3px;
+  border-color: #7a7a7a #0c0c0c #0c0c0c #7a7a7a;
+  background: linear-gradient(180deg, #454545 0%, #2a2a2a 48%, #1a1a1a 100%);
   color: var(--foreground);
   font-family: inherit;
   cursor: pointer;
@@ -172,17 +177,24 @@
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-size: 0.75rem;
+  box-shadow:
+    inset 1px 1px 0 #9a9a9a,
+    inset -1px -1px 0 #000000,
+    1px 1px 0 #000000;
 }
 
 .btn-retro:hover:not(:disabled) {
-  filter: brightness(1.15);
-  box-shadow: 0 0 8px var(--glow);
+  filter: brightness(1.12);
+  box-shadow:
+    inset 1px 1px 0 #b0b0b0,
+    inset -1px -1px 0 #000000,
+    0 0 10px var(--glow);
 }
 
 .btn-retro:active:not(:disabled) {
-  border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light)
-    var(--bevel-dark);
-  filter: brightness(0.9);
+  border-color: #0c0c0c #7a7a7a #7a7a7a #0c0c0c;
+  filter: brightness(0.92);
+  box-shadow: inset 2px 2px 4px #000000;
 }
 
 .btn-retro:disabled {
@@ -191,9 +203,10 @@
 }
 
 .btn-retro-active {
-  border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light)
-    var(--bevel-dark);
-  box-shadow: 0 0 12px var(--glow);
+  border-color: #0c0c0c #8a8a8a #8a8a8a #0c0c0c;
+  box-shadow:
+    inset 2px 2px 3px #000000,
+    0 0 14px var(--glow);
   color: var(--primary);
 }
 
@@ -201,7 +214,10 @@
   box-shadow: 0 0 10px var(--glow), inset 0 0 6px var(--glow);
 }
 
-/* CRT scanlines overlay */
+/* CRT scanlines overlay (generic) */
+.crt-scanlines {
+  position: relative;
+}
 .crt-scanlines::after {
   content: "";
   pointer-events: none;
@@ -228,6 +244,392 @@
     rgba(0, 0, 0, 0.45) 100%
   );
   z-index: 1;
+}
+
+/* ========== Windows Media Player chrome (PixelSymphony) ========== */
+.wmp-player {
+  position: relative;
+}
+
+.wmp-shell {
+  position: relative;
+  border-style: solid;
+  border-width: 4px;
+  border-color: #808080 #050505 #050505 #808080;
+  background: linear-gradient(180deg, #2a2a2a 0%, #161616 40%, #101010 100%);
+  box-shadow:
+    inset 1px 1px 0 #a0a0a0,
+    inset -2px -2px 0 #000000,
+    0 0 0 1px #000000,
+    4px 6px 0 #000000,
+    0 0 40px rgba(255, 255, 255, 0.04);
+  overflow: hidden;
+}
+
+.wmp-crt-glow {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: radial-gradient(
+    ellipse 80% 70% at 50% 40%,
+    rgba(255, 255, 255, 0.045) 0%,
+    transparent 65%
+  );
+  box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.55);
+}
+
+.wmp-scanlines {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  opacity: 0.22;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.35) 2px,
+    rgba(0, 0, 0, 0.35) 3px
+  );
+  mix-blend-mode: multiply;
+}
+
+/* Title bar — classic active window strip */
+.wmp-titlebar {
+  position: relative;
+  z-index: 2;
+  background: linear-gradient(
+    90deg,
+    #3a3a3a 0%,
+    #5a5a5a 35%,
+    #2e2e2e 70%,
+    #1a1a1a 100%
+  );
+  border-bottom: 2px solid #000000;
+  box-shadow:
+    inset 0 1px 0 #9a9a9a,
+    inset 0 -1px 0 #0a0a0a;
+}
+
+.wmp-titlebar-scan {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  opacity: 0.35;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 1px,
+    rgba(0, 0, 0, 0.25) 1px,
+    rgba(0, 0, 0, 0.25) 2px
+  );
+}
+
+.wmp-titlebar-inner {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem 0.45rem 0.55rem;
+}
+
+.wmp-titlebar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.wmp-app-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  font-size: 0.75rem;
+  color: #ffffff;
+  background: #111111;
+  border: 2px solid;
+  border-color: #666 #111 #111 #666;
+  text-shadow: 0 0 6px var(--glow);
+  flex-shrink: 0;
+}
+
+.wmp-title {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: #ffffff;
+  text-shadow:
+    0 0 8px rgba(255, 255, 255, 0.35),
+    1px 1px 0 #000000;
+  line-height: 1.2;
+}
+
+.wmp-subtitle {
+  margin: 0.1rem 0 0;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #aaaaaa;
+}
+
+.wmp-titlebar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.wmp-skin-slot {
+  max-width: 11rem;
+}
+
+.wmp-window-controls {
+  display: flex;
+  gap: 3px;
+}
+
+.wmp-win-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.2rem;
+  font-size: 10px;
+  line-height: 1;
+  color: #cccccc;
+  background: linear-gradient(180deg, #4a4a4a, #222);
+  border: 2px solid;
+  border-color: #888 #111 #111 #888;
+  box-shadow: inset 1px 1px 0 #666;
+  user-select: none;
+}
+
+.wmp-win-btn-close {
+  color: #fff;
+  background: linear-gradient(180deg, #555, #1a1a1a);
+}
+
+/* Body */
+.wmp-body {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 0.65rem 0.7rem 0.75rem;
+}
+
+.wmp-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.wmp-panel-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0 0.15rem;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #888888;
+}
+
+.wmp-panel-hint {
+  letter-spacing: 0.12em;
+  color: #555555;
+}
+
+/* Visualization CRT screen */
+.wmp-viz-panel .wmp-screen {
+  position: relative;
+  border-style: solid;
+  border-width: 4px;
+  border-color: #050505 #4a4a4a #4a4a4a #050505;
+  background: #000000;
+  box-shadow:
+    inset 0 0 30px rgba(255, 255, 255, 0.03),
+    inset 0 0 80px rgba(0, 0, 0, 0.85),
+    0 0 12px rgba(255, 255, 255, 0.04);
+  overflow: hidden;
+  min-height: 8rem;
+}
+
+.wmp-screen-scan {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  opacity: 0.4;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.4) 2px,
+    rgba(0, 0, 0, 0.4) 3px
+  );
+}
+
+.wmp-screen-vignette {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 40%,
+    rgba(0, 0, 0, 0.55) 100%
+  );
+  box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.8);
+}
+
+.wmp-screen > *:not(.wmp-screen-scan):not(.wmp-screen-vignette) {
+  position: relative;
+  z-index: 1;
+}
+
+.wmp-seek {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+  padding: 0 0.1rem;
+}
+
+.wmp-seek-track {
+  flex: 1;
+  height: 10px;
+  border: 2px solid;
+  border-color: #050505 #555 #555 #050505;
+  background: #0a0a0a;
+  box-shadow: inset 1px 1px 2px #000;
+  overflow: hidden;
+}
+
+.wmp-seek-fill {
+  height: 100%;
+  background: linear-gradient(180deg, #e8e8e8 0%, #888 45%, #444 100%);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.25);
+  min-width: 0;
+  transition: width 0.08s linear;
+}
+
+.wmp-seek-pct {
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: #777;
+  min-width: 2.2rem;
+  text-align: right;
+}
+
+/* Transport dock */
+.wmp-transport {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.65rem 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .wmp-transport {
+    flex-direction: row;
+    align-items: center;
+  }
+}
+
+.wmp-transport-btn {
+  min-width: 5.5rem;
+}
+
+.wmp-vol-label {
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #666;
+}
+
+/* Status bar */
+.wmp-statusbar {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.55rem;
+  padding: 0.35rem 0.55rem;
+  border-top: 2px solid #000;
+  background: linear-gradient(180deg, #222 0%, #151515 100%);
+  box-shadow: inset 0 1px 0 #444;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: #888;
+}
+
+.wmp-status-led {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 1px;
+  background: #333;
+  border: 1px solid #111;
+  box-shadow: inset 0 0 2px #000;
+  flex-shrink: 0;
+}
+
+.wmp-status-led[data-on="1"] {
+  background: #e8e8e8;
+  box-shadow:
+    0 0 6px rgba(255, 255, 255, 0.55),
+    inset 0 0 2px #fff;
+}
+
+.wmp-status-text {
+  color: #cccccc;
+  max-width: 12rem;
+}
+
+.wmp-status-sep {
+  color: #444;
+}
+
+.wmp-status-meta {
+  color: #777;
+}
+
+/* CRT skin: stronger phosphor on shell */
+[data-skin="crt"] .wmp-shell {
+  box-shadow:
+    inset 1px 1px 0 #3a5a3a,
+    inset -2px -2px 0 #000000,
+    0 0 0 1px #000000,
+    4px 6px 0 #000000,
+    0 0 36px rgba(57, 255, 20, 0.08);
+}
+
+[data-skin="crt"] .wmp-title {
+  color: #b8ffb8;
+  text-shadow: 0 0 10px rgba(57, 255, 20, 0.45);
+}
+
+[data-skin="crt"] .wmp-seek-fill {
+  background: linear-gradient(180deg, #7cff7c 0%, #2a8a2a 100%);
+  box-shadow: 0 0 8px rgba(57, 255, 20, 0.4);
+}
+
+[data-skin="crt"] .wmp-status-led[data-on="1"] {
+  background: #39ff14;
+  box-shadow: 0 0 8px rgba(57, 255, 20, 0.7);
+}
+
+[data-skin="pixel-forest"] .wmp-title {
+  text-shadow: 0 0 10px rgba(80, 200, 120, 0.4);
 }
 
 /* Pulsing Normie logo */
