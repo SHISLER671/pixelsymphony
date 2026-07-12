@@ -1,8 +1,21 @@
-import type { NormieVoiceInput, VoiceScore } from "@/lib/types"
+import type { InstrumentId, NormieVoiceInput, VoiceScore } from "@/lib/types"
+import { VENICE_VOICE_CAP } from "@/lib/types"
 import { buildFallbackScore } from "@/lib/fallback"
 
+const INSTRUMENTS: InstrumentId[] = [
+  "agent-pad",
+  "human-lead",
+  "cat-pluck",
+  "alien-bell",
+  "choir-ah",
+  "bass-sub",
+  "arp-pulse",
+  "glass-keys",
+  "noise-breath",
+]
+
 export function buildTranslatePrompt(voices: NormieVoiceInput[]): string {
-  const compact = voices.map((v) => {
+  const compact = voices.slice(0, VENICE_VOICE_CAP).map((v) => {
     let on = 0
     for (let i = 0; i < v.pixels.length; i++) if (v.pixels[i] === "1") on++
     const grid: string[] = []
@@ -33,40 +46,54 @@ export function buildTranslatePrompt(voices: NormieVoiceInput[]): string {
     }
   })
 
-  return `You are PixelSymphony, a translator of on-chain Normie bitmap art into 80s chiptune / synthwave LOOPS (not drones).
+  return `You are PixelSymphony — you make Normie NFTs SING as an 80s synthwave / AI-agent choir (warm, emotional, not chiptune beeps).
 
-INPUT (authentic on-chain data only — never invent traits or pixels):
+INPUT (authentic on-chain data only):
 ${JSON.stringify(compact, null, 2)}
 
-HARD RULES:
-1. This must sound like a SHORT SONG phrase, not a single sustained beep.
-2. Use 32 steps of mostly 16th notes. Include RESTS ("rest") — silence is part of the music.
-3. Melodies must MOVE: no more than 2 identical pitches in a row. Use leaps and steps from the pixel sketch contour.
-4. Solo Normie: emit TWO parts — a lead (role primary) AND a bass (role counter) from the same NFT so solo is complete.
-5. Multiple Normies: distinct registers (lead mid, harmony high, counter/bass low).
-6. Trait mapping (audible):
-   - Type → scale (Human minor, Cat pentatonic, Alien wholetone, Agent phrygian)
-   - Expression → rests & staccato (angry = short punchy; friendly = smoother; sad = more space)
-   - Age → tempo bias
-   - Eyes → filterHz (shades darker/lower, laser brighter/higher)
-7. notes: scientific pitch (C4, D#3) or "rest". durations: seconds matching ~16th–8th at the bpm (e.g. 0.1–0.25 at 110 BPM).
-8. synth: square | sawtooth | triangle | pulse
-9. scale: major | minor | pentatonic | phrygian | wholetone
-10. synopsis: 1–2 sentences naming which traits drove the sound.
-11. source must be exactly "venice".
+INSTRUMENTS (what makes sound) — pick from Type / Accessory / Gender:
+${INSTRUMENTS.join(", ")}
+- agent → agent-pad or human-lead (hymn / AI vocal feel)
+- human → human-lead, choir-ah, glass-keys
+- cat → cat-pluck
+- alien → alien-bell or arp-pulse
+- always include bass-sub for low end on solo
 
-Return ONLY valid JSON (no markdown):
+MODULATORS (how it sounds) — Expression, Age, Eyes, Hair, Facial, pixels:
+- Expression → phrasing (friendly = legato; angry = short; sad = space + reverb)
+- Age → tempo bias + attack/release
+- Eyes → filterHz (shades dark, laser bright)
+- Pixels → melody contour + rhythm density
+- attack/decay/sustain/release in seconds; reverbSend/delaySend 0–1
+
+HARD RULES:
+1. SOUND LIKE SYNTHWAVE / AGENT HYMN — long notes, pads, bass, melody. NOT 16th-note chiptune beeps.
+2. Use ~32 steps of mostly 8th notes (durations ~0.25–1.0s at 90 BPM). Include rests.
+3. Melodies MOVE (no more than 2 same pitches in a row).
+4. Solo: at least 3 parts — lead (human-lead or agent-pad), pad (agent-pad/choir-ah), bass (bass-sub).
+5. Multiple Normies: distinct instruments/registers.
+6. notes: C4 / D#3 / "rest". source must be "venice".
+
+Return ONLY JSON:
 {
   "bpm": number,
   "root": string,
-  "scale": "major"|"minor"|"pentatonic"|"phrygian"|"wholetone",
+  "scale": "major"|"minor"|"pentatonic"|"phrygian"|"wholetone"|"dorian"|"mixolydian",
+  "swing": number,
   "parts": [{
-    "role": "primary"|"harmony"|"counter",
-    "synth": "square"|"sawtooth"|"triangle"|"pulse",
+    "role": "primary"|"harmony"|"counter"|"pad"|"bass"|"arp",
+    "instrument": string,
     "notes": string[],
     "durations": number[],
     "filterHz": number,
-    "gain": number
+    "gain": number,
+    "attack": number,
+    "decay": number,
+    "sustain": number,
+    "release": number,
+    "pan": number,
+    "reverbSend": number,
+    "delaySend": number
   }],
   "synopsis": string,
   "source": "venice"
@@ -95,6 +122,17 @@ export function parseVoiceScore(raw: string): VoiceScore | null {
       const n = Math.min(p.notes.length, p.durations.length)
       p.notes = p.notes.slice(0, n)
       p.durations = p.durations.slice(0, n)
+      if (!p.instrument) {
+        // map legacy synth field
+        const s = (p as { synth?: string }).synth
+        if (s === "triangle") p.instrument = "cat-pluck"
+        else if (s === "square" || s === "pulse") p.instrument = "arp-pulse"
+        else if (s === "sawtooth") p.instrument = "human-lead"
+        else p.instrument = "human-lead"
+      }
+      if (!INSTRUMENTS.includes(p.instrument)) {
+        p.instrument = "human-lead"
+      }
     }
     data.source = "venice"
     return data
@@ -103,11 +141,16 @@ export function parseVoiceScore(raw: string): VoiceScore | null {
   }
 }
 
-/** Client: ask server for Venice translation, fall back locally */
+/** Client: Venice when small ensemble; always-good synthwave fallback otherwise */
 export async function translateToScore(
   voices: NormieVoiceInput[],
 ): Promise<VoiceScore> {
   if (voices.length === 0) return buildFallbackScore(voices)
+
+  // Large hive → deterministic mix only (fast + reliable)
+  if (voices.length > VENICE_VOICE_CAP) {
+    return buildFallbackScore(voices)
+  }
 
   try {
     const res = await fetch("/api/translate", {
@@ -116,21 +159,21 @@ export async function translateToScore(
       body: JSON.stringify({ voices }),
     })
     if (res.ok) {
-      const data = (await res.json()) as { score?: VoiceScore; error?: string }
+      const data = (await res.json()) as { score?: VoiceScore }
       if (data.score?.parts?.length) {
-        // Prefer fallback if Venice returned a near-drone (too few unique pitches)
         const unique = new Set(
           data.score.parts.flatMap((p) =>
             p.notes.filter((n) => n && n !== "rest"),
           ),
         )
-        if (unique.size >= 3) {
+        // Prefer Venice if it has melodic variety; else fallback
+        if (unique.size >= 4) {
           return { ...data.score, source: "venice" }
         }
       }
     }
   } catch {
-    // network → fallback
+    // fallback
   }
 
   return buildFallbackScore(voices)

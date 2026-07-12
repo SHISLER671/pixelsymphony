@@ -110,10 +110,16 @@ export function Player({
       const s = await translateToScore(v)
       setScore(s)
       await audio.loadScore(s)
-      if (s.source === "fallback") {
-        toast.message("Playing via deterministic fallback", {
-          description: "Venice unavailable or no key — still 100% on-chain data",
+      if (ids.length > 6) {
+        toast.message(`Hive mix · ${ids.length} Normies`, {
+          description: `${s.parts.length} audio layers · synthwave stack`,
         })
+      } else if (s.source === "fallback") {
+        toast.message("Synthwave from on-chain pixels", {
+          description: "Deterministic hive arrangement (Venice optional)",
+        })
+      } else {
+        toast.success("Venice arrangement ready")
       }
     } catch (err) {
       console.error(err)
@@ -179,7 +185,13 @@ export function Player({
       />
 
       {loading ? (
-        <LoadingIcon label="Decoding pixels into song…" />
+        <LoadingIcon
+          label={
+            selected.length > 6
+              ? `Tuning the hive (${selected.length} voices)…`
+              : "Decoding pixels into song…"
+          }
+        />
       ) : (
         <Visualizer voices={voices} skin={skin} progress={progress} />
       )}

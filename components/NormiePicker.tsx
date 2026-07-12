@@ -3,7 +3,6 @@
 import Image from "next/image"
 import { useState } from "react"
 
-import { MAX_VOICES } from "@/lib/types"
 import { normieImageUrl } from "@/lib/normies"
 import { cn } from "@/lib/utils"
 
@@ -19,6 +18,9 @@ export function NormiePicker({
   disabled?: boolean
 }) {
   const [manualId, setManualId] = useState("")
+  const allSelected =
+    availableIds.length > 0 &&
+    availableIds.every((id) => selected.includes(id))
 
   function toggle(id: number) {
     if (disabled) return
@@ -26,32 +28,60 @@ export function NormiePicker({
       onChange(selected.filter((x) => x !== id))
       return
     }
-    if (selected.length >= MAX_VOICES) return
     onChange([...selected, id])
+  }
+
+  function selectAll() {
+    if (disabled) return
+    onChange([...availableIds])
+  }
+
+  function clearAll() {
+    if (disabled) return
+    onChange([])
   }
 
   function addManual() {
     const id = Number(manualId)
     if (!Number.isFinite(id) || id < 0 || id > 9999) return
-    if (selected.includes(id) || selected.length >= MAX_VOICES) return
-    // Allow sample/manual pick even if not in available list (sample mode)
+    if (selected.includes(id)) return
     onChange([...selected, id])
     setManualId("")
   }
 
   return (
     <div className="space-y-3">
-      <div className="flex items-baseline justify-between gap-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-          Select voices
+          Select the hive
         </h3>
         <span className="text-[10px] text-muted-foreground">
-          {selected.length}/{MAX_VOICES} · 1st = primary
+          {selected.length} selected · 1st = primary
         </span>
       </div>
 
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          className={cn("btn-retro", allSelected && "btn-retro-active")}
+          disabled={disabled || availableIds.length === 0}
+          onClick={selectAll}
+          title="Hear the whole hive"
+        >
+          ALL
+        </button>
+        <button
+          type="button"
+          className="btn-retro"
+          disabled={disabled || selected.length === 0}
+          onClick={clearAll}
+        >
+          Clear
+        </button>
+      </div>
+
       {availableIds.length > 0 ? (
-        <div className="grid max-h-48 grid-cols-4 gap-2 overflow-y-auto sm:grid-cols-6">
+        <div className="grid max-h-56 grid-cols-4 gap-2 overflow-y-auto sm:grid-cols-6 md:grid-cols-8">
           {availableIds.map((id) => {
             const idx = selected.indexOf(id)
             const isSelected = idx >= 0
@@ -59,13 +89,13 @@ export function NormiePicker({
               <button
                 key={id}
                 type="button"
-                disabled={disabled || (!isSelected && selected.length >= MAX_VOICES)}
+                disabled={disabled}
                 onClick={() => toggle(id)}
                 className={cn(
                   "bevel-inset relative aspect-square overflow-hidden p-0.5 transition",
                   isSelected && "glow-active ring-1 ring-primary",
                 )}
-                title={`Normie #${id}${isSelected ? ` (${idx === 0 ? "primary" : idx === 1 ? "harmony" : "counter"})` : ""}`}
+                title={`Normie #${id}${isSelected ? ` (#${idx + 1})` : ""}`}
               >
                 <Image
                   src={normieImageUrl(id)}
@@ -78,7 +108,7 @@ export function NormiePicker({
                 />
                 {isSelected && (
                   <span className="absolute bottom-0 left-0 right-0 bg-black/80 text-center text-[9px] text-primary">
-                    {idx === 0 ? "PRI" : idx === 1 ? "HAR" : "CTR"}
+                    {idx === 0 ? "PRI" : idx + 1}
                   </span>
                 )}
               </button>
@@ -99,13 +129,13 @@ export function NormiePicker({
           placeholder="Token ID"
           value={manualId}
           onChange={(e) => setManualId(e.target.value)}
-          disabled={disabled || selected.length >= MAX_VOICES}
+          disabled={disabled}
           className="bevel-inset min-h-11 flex-1 bg-black px-3 font-mono text-sm text-foreground outline-none focus:glow-active"
         />
         <button
           type="button"
           className="btn-retro"
-          disabled={disabled || selected.length >= MAX_VOICES}
+          disabled={disabled}
           onClick={addManual}
         >
           Add

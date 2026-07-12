@@ -19,12 +19,16 @@ export async function POST(req: NextRequest) {
   const voices = body.voices ?? []
   if (!Array.isArray(voices) || voices.length === 0) {
     return NextResponse.json(
-      { error: "voices[] required (1–3 Normies)" },
+      { error: "voices[] required (at least 1 Normie)" },
       { status: 400 },
     )
   }
-  if (voices.length > 3) {
-    return NextResponse.json({ error: "Max 3 Normies" }, { status: 400 })
+  // Large hives are composed client-side; keep Venice payloads bounded
+  if (voices.length > 12) {
+    return NextResponse.json(
+      { error: "Too many voices for Venice path; use client fallback" },
+      { status: 400 },
+    )
   }
 
   if (!hasVeniceKey()) {

@@ -39,14 +39,16 @@ export function Visualizer({
     if (!ctx) return
 
     const colors = skinColors(skin)
-    const cell = 4
+    // Hive mode: show up to 8 faces so canvas stays usable
+    const shown = voices.slice(0, 8)
+    const cell = voices.length > 4 ? 3 : 4
     const gap = 1
     const pad = 8
     const gridW = 40 * (cell + gap)
-    const n = Math.max(voices.length, 1)
+    const n = Math.max(shown.length, 1)
     const gridH = 40 * (cell + gap)
-    const totalW = pad * 2 + n * gridW + (n - 1) * 16
-    const totalH = pad * 2 + gridH + 24
+    const totalW = pad * 2 + n * gridW + (n - 1) * 12
+    const totalH = pad * 2 + gridH + 28
 
     canvas.width = totalW
     canvas.height = totalH
@@ -54,18 +56,14 @@ export function Visualizer({
     ctx.fillStyle = "#000000"
     ctx.fillRect(0, 0, totalW, totalH)
 
-    voices.forEach((voice, vi) => {
-      const ox = pad + vi * (gridW + 16)
+    shown.forEach((voice, vi) => {
+      const ox = pad + vi * (gridW + 12)
       const oy = pad
 
       // label
       ctx.fillStyle = "#777777"
       ctx.font = "10px monospace"
-      ctx.fillText(
-        `#${voice.tokenId} ${voice.role}`,
-        ox,
-        totalH - 8,
-      )
+      ctx.fillText(`#${voice.tokenId}`, ox, totalH - 8)
 
       const pixels = voice.pixels
       const pulseRow = Math.floor(progress * 40) % 40
@@ -106,6 +104,14 @@ export function Visualizer({
       ctx.fillStyle = "#555"
       ctx.font = "12px monospace"
       ctx.fillText("Select a Normie to visualize", pad, totalH / 2)
+    } else if (voices.length > shown.length) {
+      ctx.fillStyle = "#666"
+      ctx.font = "9px monospace"
+      ctx.fillText(
+        `+${voices.length - shown.length} more in the hive mix`,
+        pad,
+        totalH - 8,
+      )
     }
   }, [voices, skin, progress])
 

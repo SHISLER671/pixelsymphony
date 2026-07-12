@@ -52,7 +52,10 @@ export async function fetchNormieVoice(
 ): Promise<NormieVoiceInput> {
   const [pixels, traits, metadata] = await Promise.all([
     fetchPixels(tokenId),
-    fetchTraits(tokenId).catch(() => ({ raw: "", attributes: [] as NormieTrait[] })),
+    fetchTraits(tokenId).catch(() => ({
+      raw: "",
+      attributes: [] as NormieTrait[],
+    })),
     fetchMetadata(tokenId).catch(() => ({
       name: `Normie #${tokenId}`,
       attributes: [] as NormieTrait[],
@@ -71,11 +74,32 @@ export async function fetchNormieVoice(
   }
 }
 
+/** Fetch many Normies with limited concurrency (hive / ALL mode). */
 export async function fetchNormieVoices(
   ids: number[],
 ): Promise<NormieVoiceInput[]> {
-  const roles: VoiceRole[] = ["primary", "harmony", "counter"]
-  return Promise.all(
-    ids.slice(0, 3).map((id, i) => fetchNormieVoice(id, roles[i] ?? "harmony")),
+  if (ids.length === 0) return []
+  const roles: VoiceRole[] = ["primary", "harmony", "counter", "pad", "arp"]
+  const concurrency = 6
+  const out: NormieVoiceInput[] = new Array(ids.length)
+  let cursor = 0
+
+  async function worker() {
+    while (cursor < ids.length) {
+      const i = cursor++
+      const id = ids[i]
+      try {
+        out[i] = await fetchNormieVoice(id, roles[i % roles.length] ?? "harmony")
+      } catch (err) {
+        console.warn(`Failed to load Normie #${id}`, err)
+        // placeholder silent skip — fill with empty later
+        out[i] = null as unknown as NormieVoiceInput
+      }
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, ids.length) }, () => worker()),
   )
+  return out.filter(Boolean)
 }

@@ -1,6 +1,6 @@
 "use client"
 
-import type { SynthType, VoiceScore } from "@/lib/types"
+import type { InstrumentId, VoicePart, VoiceScore } from "@/lib/types"
 
 type ToneModule = typeof import("tone")
 
@@ -16,81 +16,241 @@ let fxNodes: any[] = []
 let mediaDest: MediaStreamAudioDestinationNode | null = null
 let recorder: MediaRecorder | null = null
 let recordChunks: Blob[] = []
-let volumeDb = -6
+let volumeDb = -8
 
 async function getTone(): Promise<ToneModule> {
-  if (!tone) {
-    tone = await import("tone")
-  }
+  if (!tone) tone = await import("tone")
   return tone
 }
 
-function createSynth(
+type Playable = {
+  triggerAttackRelease: (note: string, duration: number, time?: number) => void
+  releaseAll?: (time?: number) => void
+  dispose: () => void
+}
+
+function envOpts(part: VoicePart) {
+  return {
+    attack: part.attack ?? 0.05,
+    decay: part.decay ?? 0.2,
+    sustain: part.sustain ?? 0.4,
+    release: part.release ?? 0.35,
+  }
+}
+
+function createInstrument(
   T: ToneModule,
-  type: SynthType,
-  filterHz: number,
-  gain: number,
+  part: VoicePart,
   dest: InstanceType<ToneModule["Gain"]>,
-) {
+): Playable {
+  const instrument: InstrumentId = part.instrument || "human-lead"
   const filter = new T.Filter({
-    frequency: filterHz,
+    frequency: part.filterHz,
     type: "lowpass",
-    Q: 1.2,
+    Q: instrument === "bass-sub" ? 0.7 : 1.1,
   })
-  const vol = new T.Volume(T.gainToDb(Math.max(0.01, Math.min(1, gain))))
-  const oscType =
-    type === "pulse" ? "square" : (type as "square" | "sawtooth" | "triangle")
+  const panner = new T.Panner(part.pan ?? 0)
+  const vol = new T.Volume(
+    T.gainToDb(Math.max(0.01, Math.min(0.9, part.gain))),
+  )
+  const env = envOpts(part)
+  const nodes: { dispose: () => void }[] = [filter, panner, vol]
 
-  // Chiptune envelopes — snappy, not a sustained hum
-  const synth = new T.MonoSynth({
-    oscillator: { type: oscType },
-    envelope: {
-      attack: 0.005,
-      decay: 0.12,
-      sustain: 0.08,
-      release: 0.08,
-    },
-    filterEnvelope: {
-      attack: 0.005,
-      decay: 0.08,
-      sustain: 0.15,
-      release: 0.1,
-      baseFrequency: Math.max(120, filterHz * 0.35),
-      octaves: 2.5,
-    },
-  })
+  let trigger: (note: string, duration: number, time?: number) => void
+  let releaseAll: ((time?: number) => void) | undefined
 
-  synth.chain(filter, vol, dest)
+  switch (instrument) {
+    case "agent-pad": {
+      const s = new T.FMSynth({
+        harmonicity: 2.5,
+        modulationIndex: 8,
+        oscillator: { type: "sine" },
+        envelope: env,
+        modulation: { type: "triangle" },
+        modulationEnvelope: {
+          attack: env.attack * 1.2,
+          decay: 0.3,
+          sustain: 0.4,
+          release: env.release,
+        },
+      })
+      s.chain(filter, panner, vol, dest)
+      nodes.push(s)
+      trigger = (note, dur, time) => s.triggerAttackRelease(note, dur, time)
+      releaseAll = (t) => s.triggerRelease(t)
+      break
+    }
+    case "choir-ah": {
+      const s = new T.AMSynth({
+        harmonicity: 1.5,
+        oscillator: { type: "sine" },
+        envelope: { ...env, attack: Math.max(0.15, env.attack) },
+        modulation: { type: "sine" },
+        modulationEnvelope: {
+          attack: 0.2,
+          decay: 0.2,
+          sustain: 0.5,
+          release: 0.6,
+        },
+      })
+      s.chain(filter, panner, vol, dest)
+      nodes.push(s)
+      trigger = (note, dur, time) => s.triggerAttackRelease(note, dur, time)
+      releaseAll = (t) => s.triggerRelease(t)
+      break
+    }
+    case "alien-bell": {
+      const s = new T.FMSynth({
+        harmonicity: 8,
+        modulationIndex: 22,
+        oscillator: { type: "sine" },
+        envelope: {
+          attack: 0.01,
+          decay: 0.4,
+          sustain: 0.15,
+          release: Math.max(0.5, env.release),
+        },
+        modulation: { type: "square" },
+        modulationEnvelope: {
+          attack: 0.01,
+          decay: 0.5,
+          sustain: 0.1,
+          release: 0.5,
+        },
+      })
+      s.chain(filter, panner, vol, dest)
+      nodes.push(s)
+      trigger = (note, dur, time) => s.triggerAttackRelease(note, dur, time)
+      releaseAll = (t) => s.triggerRelease(t)
+      break
+    }
+    case "cat-pluck": {
+      const s = new T.PluckSynth({
+        attackNoise: 0.5,
+        dampening: part.filterHz,
+        resonance: 0.85,
+      })
+      s.chain(filter, panner, vol, dest)
+      nodes.push(s)
+      trigger = (note, dur, time) => s.triggerAttack(note, time)
+      break
+    }
+    case "bass-sub": {
+      const s = new T.MonoSynth({
+        oscillator: { type: "fatsawtooth", count: 2, spread: 12 },
+        envelope: { ...env, attack: 0.02, sustain: 0.55 },
+        filterEnvelope: {
+          attack: 0.02,
+          decay: 0.25,
+          sustain: 0.2,
+          release: 0.3,
+          baseFrequency: 60,
+          octaves: 2.5,
+        },
+      })
+      s.chain(filter, panner, vol, dest)
+      nodes.push(s)
+      trigger = (note, dur, time) => s.triggerAttackRelease(note, dur, time)
+      releaseAll = (t) => s.triggerRelease(t)
+      break
+    }
+    case "arp-pulse": {
+      const s = new T.MonoSynth({
+        oscillator: { type: "square" },
+        envelope: {
+          attack: 0.005,
+          decay: 0.1,
+          sustain: 0.1,
+          release: 0.08,
+        },
+        filterEnvelope: {
+          attack: 0.005,
+          decay: 0.1,
+          sustain: 0.1,
+          release: 0.1,
+          baseFrequency: part.filterHz * 0.4,
+          octaves: 3,
+        },
+      })
+      s.chain(filter, panner, vol, dest)
+      nodes.push(s)
+      trigger = (note, dur, time) =>
+        s.triggerAttackRelease(note, Math.min(dur, 0.2), time)
+      releaseAll = (t) => s.triggerRelease(t)
+      break
+    }
+    case "glass-keys": {
+      const s = new T.Synth({
+        oscillator: { type: "triangle" },
+        envelope: {
+          attack: 0.01,
+          decay: 0.3,
+          sustain: 0.2,
+          release: 0.4,
+        },
+      })
+      s.chain(filter, panner, vol, dest)
+      nodes.push(s)
+      trigger = (note, dur, time) => s.triggerAttackRelease(note, dur, time)
+      releaseAll = (t) => s.triggerRelease(t)
+      break
+    }
+    case "noise-breath": {
+      const s = new T.NoiseSynth({
+        noise: { type: "pink" },
+        envelope: {
+          attack: 0.05,
+          decay: 0.2,
+          sustain: 0,
+          release: 0.2,
+        },
+      })
+      s.chain(filter, panner, vol, dest)
+      nodes.push(s)
+      trigger = (_note, dur, time) => s.triggerAttackRelease(dur * 0.5, time)
+      break
+    }
+    case "human-lead":
+    default: {
+      const s = new T.MonoSynth({
+        oscillator: { type: "fatsawtooth", count: 3, spread: 18 },
+        envelope: env,
+        filterEnvelope: {
+          attack: env.attack,
+          decay: env.decay,
+          sustain: 0.25,
+          release: env.release,
+          baseFrequency: Math.max(200, part.filterHz * 0.3),
+          octaves: 2.8,
+        },
+      })
+      s.chain(filter, panner, vol, dest)
+      nodes.push(s)
+      trigger = (note, dur, time) => s.triggerAttackRelease(note, dur, time)
+      releaseAll = (t) => s.triggerRelease(t)
+      break
+    }
+  }
 
   return {
-    triggerAttackRelease: (
-      note: string,
-      duration: number,
-      time?: number,
-    ) => {
-      if (note === "rest" || !note) return
+    triggerAttackRelease: (note, duration, time) => {
+      if (!note || note === "rest") return
       try {
-        // Cap note length so mono voice doesn't drone
-        const dur = Math.min(duration, 0.35)
-        synth.triggerAttackRelease(note, dur, time)
+        // Allow long pad notes (up to 4s) — no 0.35 staccato cap
+        const dur = Math.min(Math.max(duration, 0.05), 4)
+        trigger(note, dur, time)
       } catch {
-        // invalid note skipped
+        /* skip bad notes */
       }
     },
-    releaseAll: (time?: number) => {
-      try {
-        synth.triggerRelease(time)
-      } catch {
-        /* ignore */
-      }
-    },
+    releaseAll,
     dispose: () => {
-      try {
-        synth.dispose()
-        filter.dispose()
-        vol.dispose()
-      } catch {
-        /* ignore */
+      for (const n of nodes) {
+        try {
+          n.dispose()
+        } catch {
+          /* */
+        }
       }
     },
   }
@@ -113,25 +273,33 @@ export async function loadScore(score: VoiceScore): Promise<void> {
 
   currentScore = score
   T.Transport.bpm.value = score.bpm
-  T.Transport.swing = 0
+  T.Transport.swing = score.swing ?? 0.04
+  T.Transport.swingSubdivision = "8n"
   T.getDestination().volume.value = volumeDb
 
-  // Light bus FX for glue (not muddy)
-  const bus = new T.Gain(1)
+  // Master synthwave bus: chorus → delay → reverb
+  const bus = new T.Gain(0.9)
+  const chorus = new T.Chorus({
+    frequency: 0.8,
+    delayTime: 3.5,
+    depth: 0.5,
+    wet: 0.25,
+  }).start()
   const delay = new T.FeedbackDelay({
     delayTime: "8n",
-    feedback: 0.12,
-    wet: 0.12,
+    feedback: 0.28,
+    wet: 0.22,
   })
-  bus.chain(delay, T.getDestination())
-  fxNodes.push(bus, delay)
+  const reverb = new T.Reverb({ decay: 3.2, preDelay: 0.02, wet: 0.35 })
+  await reverb.generate()
+  bus.chain(chorus, delay, reverb, T.getDestination())
+  fxNodes.push(bus, chorus, delay, reverb)
 
   try {
     const ctx = T.getContext().rawContext as AudioContext
     mediaDest = ctx.createMediaStreamDestination()
-    // Tap master for recording when possible
     try {
-      delay.connect(mediaDest as unknown as import("tone").ToneAudioNode)
+      reverb.connect(mediaDest as unknown as import("tone").ToneAudioNode)
     } catch {
       /* optional */
     }
@@ -140,22 +308,26 @@ export async function loadScore(score: VoiceScore): Promise<void> {
   }
 
   for (const part of score.parts) {
-    const s = createSynth(T, part.synth, part.filterHz, part.gain, bus)
+    const s = createInstrument(T, part, bus)
     synths.push(s)
 
     let t = 0
     const events: Array<{ time: number; note: string; dur: number }> = []
     for (let i = 0; i < part.notes.length; i++) {
-      const dur = Math.max(0.03, part.durations[i] ?? 0.1)
+      const rawDur = part.durations[i] ?? 0.2
+      const dur = Math.max(0.03, rawDur)
       const note = part.notes[i]
       if (note && note !== "rest") {
         events.push({ time: t, note, dur })
       }
-      t += Math.max(0.03, part.durations[i] ?? 0.1)
+      // advance by at least a small quantum even for long notes
+      t += Math.max(0.05, Math.min(rawDur, 2))
     }
 
-    // Align all parts to the same loop length (max part length)
-    const loopEnd = t || (60 / score.bpm) * 8
+    // Fix loop length from total intended grid
+    const loopEnd =
+      part.durations.reduce((a, b) => a + Math.max(0.05, Math.min(b, 2)), 0) ||
+      (60 / score.bpm) * 8
 
     if (events.length === 0) continue
 
@@ -171,7 +343,6 @@ export async function loadScore(score: VoiceScore): Promise<void> {
     sequences.push(seq)
   }
 
-  // Normalize loop ends to longest sequence so multi-parts stay locked
   let maxLoop = 0
   for (const seq of sequences) {
     if (typeof seq.loopEnd === "number" && seq.loopEnd > maxLoop) {
@@ -179,9 +350,7 @@ export async function loadScore(score: VoiceScore): Promise<void> {
     }
   }
   if (maxLoop > 0) {
-    for (const seq of sequences) {
-      seq.loopEnd = maxLoop
-    }
+    for (const seq of sequences) seq.loopEnd = maxLoop
   }
 }
 
@@ -199,7 +368,7 @@ export async function pause(): Promise<void> {
     try {
       s.releaseAll?.()
     } catch {
-      /* ignore */
+      /* */
     }
   }
 }
@@ -210,7 +379,7 @@ export function stop(): void {
     try {
       s.releaseAll?.()
     } catch {
-      /* ignore */
+      /* */
     }
   }
   tone.Transport.stop()
@@ -218,10 +387,8 @@ export function stop(): void {
 }
 
 export function setVolume(linear: number): void {
-  volumeDb = linear <= 0 ? -60 : 20 * Math.log10(linear) - 6
-  if (tone) {
-    tone.getDestination().volume.value = volumeDb
-  }
+  volumeDb = linear <= 0 ? -60 : 20 * Math.log10(linear) - 8
+  if (tone) tone.getDestination().volume.value = volumeDb
 }
 
 export function getTransportProgress(): number {
@@ -230,7 +397,9 @@ export function getTransportProgress(): number {
     const pos = tone.Transport.seconds
     const part = currentScore.parts[0]
     if (!part) return 0
-    const len = part.durations.reduce((a, b) => a + b, 0) || 8
+    const len =
+      part.durations.reduce((a, b) => a + Math.max(0.05, Math.min(b, 2)), 0) ||
+      8
     return (pos % len) / len
   } catch {
     return 0
@@ -278,7 +447,7 @@ function disposeGraph(): void {
     try {
       s.dispose()
     } catch {
-      /* ignore */
+      /* */
     }
   }
   sequences = []
@@ -286,7 +455,7 @@ function disposeGraph(): void {
     try {
       s.dispose()
     } catch {
-      /* ignore */
+      /* */
     }
   }
   synths = []
@@ -294,7 +463,7 @@ function disposeGraph(): void {
     try {
       n.dispose()
     } catch {
-      /* ignore */
+      /* */
     }
   }
   fxNodes = []
