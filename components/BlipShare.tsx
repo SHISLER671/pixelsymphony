@@ -5,100 +5,65 @@ import { useState } from "react"
 import { toast } from "sonner"
 
 import * as audio from "@/lib/audio"
-import {
-  blobToWav,
-  downloadBlob,
-  extensionForMime,
-  pickVideoMime,
-  tryNativeShare,
-} from "@/lib/blip-export"
+import { downloadBlob, tryNativeShare } from "@/lib/blip-export"
 
-const BLIP_SECONDS = 10
+/** Offline render length — universal WAV, no real-time wait of 30s wall clock
+ *  (Tone.Offline renders as fast as the CPU allows). */
+const BLIP_DURATION_MS = 20_000
 
 export function BlipShare({
   disabled,
   title = "PixelSymphony Blip",
-  getCanvas,
   shareText,
 }: {
   disabled?: boolean
   title?: string
-  /** Visualizer canvas for video blips (shareable on social). */
+  /** Unused (kept for call-site compat). WAV is audio-only. */
   getCanvas?: () => HTMLCanvasElement | null
   shareText?: string
 }) {
-  const [recording, setRecording] = useState(false)
   const [busy, setBusy] = useState(false)
 
-  async function recordBlip() {
+  async function recordAndShareBlip() {
     if (disabled || busy) return
     setBusy(true)
     try {
       await audio.unlockAudio()
-      await audio.play()
 
-      const canvas = getCanvas?.() ?? null
-      const videoMime = pickVideoMime()
-      let recorded: Blob
-      let filename: string
+      toast.message("Rendering Blip…", {
+        description: "Offline → WAV (universal, high quality)",
+      })
 
-      await audio.ensureRecordingTap()
+      const blob = await audio.captureAsWAV(BLIP_DURATION_MS)
+      const filename = `pixelsymphony-blip-${Date.now()}.wav`
 
-      if (canvas && videoMime) {
-        toast.message("Recording Blip…", {
-          description: `${BLIP_SECONDS}s video (easy to post)`,
-        })
-        setRecording(true)
-        recorded = await recordVideoBlip(canvas, videoMime, BLIP_SECONDS)
-        const ext = extensionForMime(videoMime)
-        filename = `pixelsymphony-blip-${Date.now()}.${ext}`
-      } else {
-        toast.message("Recording Blip…", {
-          description: `${BLIP_SECONDS}s audio → WAV (universal)`,
-        })
-        setRecording(true)
-        await audio.startRecording()
-        await sleep(BLIP_SECONDS * 1000)
-        const raw = await audio.stopRecording()
-        // Convert to WAV for Messages, Drive, desktop apps, TikTok audio tools
-        try {
-          recorded = await blobToWav(raw)
-          filename = `pixelsymphony-blip-${Date.now()}.wav`
-        } catch {
-          recorded = raw
-          filename = `pixelsymphony-blip-${Date.now()}.webm`
+      // Always download .wav
+      downloadBlob(blob, filename)
+
+      // Share text / native sheet (file share when supported)
+      const text =
+        shareText ||
+        "Listen to my Normie singing in PixelSymphony! #PixelSymphony #Normies"
+      const file = new File([blob], filename, { type: "audio/wav" })
+      const shared = await tryNativeShare(file, title, text)
+
+      if (!shared) {
+        // Desktop: also open X intent (download already saved)
+        if (typeof navigator !== "undefined" && !navigator.share) {
+          // no-op — download already done; Share X button still available
         }
       }
 
-      setRecording(false)
-
-      const file = new File([recorded], filename, { type: recorded.type })
-      const caption =
-        shareText ||
-        `${title} — Your Normies are singing. Tune in. #PixelSymphony #Normies`
-
-      const shared = await tryNativeShare(file, title, caption)
-      if (!shared) {
-        downloadBlob(recorded, filename)
-      }
-
-      const kind = filename.endsWith(".wav")
-        ? "WAV audio"
-        : filename.endsWith(".mp4")
-          ? "MP4 video"
-          : "video file"
-
-      toast.success(`Blip ready (${kind})`, {
+      toast.success("Blip saved as WAV", {
         description: shared
-          ? "Opened your share sheet"
-          : "Downloaded — drop into X, TikTok, Messages, or Drive",
+          ? "Share sheet opened"
+          : "Universal audio — drop into X, TikTok, Messages, or Drive",
       })
-    } catch (err) {
-      console.error(err)
+    } catch (e) {
+      console.error(e)
       toast.error("Could not record Blip", {
-        description: err instanceof Error ? err.message : "Unknown error",
+        description: e instanceof Error ? e.message : "Try again after Play loads a Normie",
       })
-      setRecording(false)
     } finally {
       setBusy(false)
     }
@@ -107,11 +72,11 @@ export function BlipShare({
   function shareX() {
     const text = encodeURIComponent(
       shareText ||
-        `${title} — Your Normies are singing. Tune in. #PixelSymphony #Normies`,
+        "Listen to my Normie singing in PixelSymphony! #PixelSymphony #Normies",
     )
     const url = encodeURIComponent(
       typeof window !== "undefined"
-        ? window.location.origin + "/player?sample=1"
+        ? window.location.href
         : "https://pixelsymphony.vercel.app",
     )
     window.open(
@@ -123,8 +88,7 @@ export function BlipShare({
 
   function shareTikTokHint() {
     toast.message("TikTok", {
-      description:
-        "Record a Blip (video or WAV), then upload that file in the TikTok app.",
+      description: "Save the .wav Blip, then upload that file in the TikTok app.",
     })
   }
 
@@ -133,12 +97,12 @@ export function BlipShare({
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
-          className={`btn-retro inline-flex items-center gap-2 ${recording ? "btn-retro-active" : ""}`}
+          className={`btn-retro inline-flex items-center gap-2 ${busy ? "btn-retro-active" : ""}`}
           disabled={disabled || busy}
-          onClick={recordBlip}
+          onClick={recordAndShareBlip}
         >
           <Download className="size-3.5" />
-          {recording ? "Recording…" : "Save Blip"}
+          {busy ? "Rendering…" : "Save Blip (.wav)"}
         </button>
         <button
           type="button"
@@ -157,76 +121,10 @@ export function BlipShare({
         </button>
       </div>
       <p className="text-[10px] leading-relaxed text-muted-foreground">
-        Saves a short{" "}
-        <span className="text-foreground/80">MP4/WebM video</span> when possible
-        (pixels + audio), otherwise a universal{" "}
-        <span className="text-foreground/80">WAV</span> — both easier to post
-        than raw WebM audio.
+        Exports a{" "}
+        <span className="text-foreground/80">.wav</span> file offline (no
+        codec issues) — works on phones, desktops, and editors.
       </p>
     </div>
   )
-}
-
-function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms))
-}
-
-/**
- * Composite visualizer canvas + Tone audio into one shareable video blob.
- */
-async function recordVideoBlip(
-  canvas: HTMLCanvasElement,
-  mimeType: string,
-  seconds: number,
-): Promise<Blob> {
-  const fps = 30
-  // Draw loop so captureStream has fresh frames while Transport runs
-  const stream = canvas.captureStream(fps)
-
-  // Mix in audio from the engine when available
-  const audioStream = audio.getRecordingStream?.()
-  if (audioStream) {
-    for (const track of audioStream.getAudioTracks()) {
-      stream.addTrack(track)
-    }
-  } else {
-    // Fallback: also start engine recorder path so we at least have audio file path
-    await audio.startRecording()
-  }
-
-  const chunks: Blob[] = []
-  const recorder = new MediaRecorder(stream, {
-    mimeType,
-    videoBitsPerSecond: 2_500_000,
-  })
-
-  recorder.ondataavailable = (e) => {
-    if (e.data.size > 0) chunks.push(e.data)
-  }
-
-  const stopped = new Promise<Blob>((resolve, reject) => {
-    recorder.onstop = () => {
-      resolve(new Blob(chunks, { type: mimeType.split(";")[0] || mimeType }))
-    }
-    recorder.onerror = () => reject(new Error("Video recording failed"))
-  })
-
-  recorder.start(100)
-  await sleep(seconds * 1000)
-  recorder.stop()
-
-  // Stop only the video tracks we created; don't kill engine audio graph
-  for (const track of stream.getVideoTracks()) {
-    track.stop()
-  }
-
-  if (!audioStream) {
-    try {
-      await audio.stopRecording()
-    } catch {
-      /* optional */
-    }
-  }
-
-  return stopped
 }

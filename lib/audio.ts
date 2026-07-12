@@ -1,5 +1,6 @@
 "use client"
 
+import { audioBufferToWav } from "@/lib/blip-export"
 import type { InstrumentId, VoicePart, VoiceScore } from "@/lib/types"
 
 type ToneModule = typeof import("tone")
@@ -496,4 +497,116 @@ export function disposeAudio(): void {
   stop()
   disposeGraph()
   currentScore = null
+}
+
+export function getCurrentScore(): VoiceScore | null {
+  return currentScore
+}
+
+function loopLengthSeconds(score: VoiceScore): number {
+  const fromParts = score.parts.reduce((max, part) => {
+    const len = part.durations.reduce(
+      (a, b) => a + Math.max(0.05, Math.min(b, 4)),
+      0,
+    )
+    return Math.max(max, len)
+  }, 0)
+  return score.loopSeconds ?? (fromParts > 0 ? fromParts : (60 / score.bpm) * 64)
+}
+
+/**
+ * Render the current score offline to a universal 16-bit PCM WAV blob.
+ * No MediaRecorder / codec issues — high quality, works everywhere.
+ */
+export async function captureAsWAV(durationMs: number): Promise<Blob> {
+  if (!currentScore) {
+    throw new Error("No score loaded — select a Normie and wait for it to load")
+  }
+  const score = currentScore
+  const T = await getTone()
+  const durationSec = Math.max(1, Math.min(60, durationMs / 1000))
+  const sharedLoop = loopLengthSeconds(score)
+
+  // Offline render does not touch the live player graph
+  const toneBuffer = await T.Offline(async () => {
+    const bus = new T.Gain(0.92)
+    const chorus = new T.Chorus({
+      frequency: 0.5,
+      delayTime: 3.5,
+      depth: 0.35,
+      wet: 0.18,
+    }).start()
+    const delay = new T.FeedbackDelay({
+      delayTime: "8n",
+      feedback: 0.22,
+      wet: 0.15,
+    })
+    const reverb = new T.Reverb({ decay: 3.5, preDelay: 0.02, wet: 0.28 })
+    await reverb.generate()
+    bus.chain(chorus, delay, reverb, T.getDestination())
+
+    T.Transport.bpm.value = score.bpm
+    T.Transport.swing = score.swing ?? 0.05
+    T.Transport.swingSubdivision = "8n"
+
+    for (const part of score.parts) {
+      const s = createInstrument(T, part, bus)
+      let t = 0
+      const events: Array<{ time: number; note: string; dur: number }> = []
+      for (let i = 0; i < part.notes.length; i++) {
+        const rawDur = part.durations[i] ?? 0.25
+        const dur = Math.max(0.05, rawDur)
+        const note = part.notes[i]
+        if (note && note !== "rest") {
+          events.push({ time: t, note, dur })
+        }
+        t += Math.max(0.08, Math.min(rawDur, 4))
+      }
+      if (events.length === 0) continue
+
+      const seq = new T.Part((time, ev) => {
+        if (!ev || typeof ev === "number") return
+        const event = ev as { note: string; dur: number }
+        s.triggerAttackRelease(event.note, event.dur, time)
+      }, events)
+
+      seq.loop = true
+      seq.loopEnd = sharedLoop
+      const offset = Math.max(0, part.startOffset ?? 0) % sharedLoop
+      seq.start(offset)
+    }
+
+    T.Transport.start(0)
+  }, durationSec)
+
+  // ToneAudioBuffer → native AudioBuffer → WAV
+  const native =
+    typeof (toneBuffer as { get?: () => AudioBuffer }).get === "function"
+      ? (toneBuffer as { get: () => AudioBuffer }).get()
+      : (toneBuffer as unknown as AudioBuffer)
+
+  if (!native || typeof native.getChannelData !== "function") {
+    // Fallback: pull from ToneAudioBuffer.toArray()
+    const arr = (
+      toneBuffer as { toArray?: () => Float32Array | Float32Array[] }
+    ).toArray?.()
+    if (!arr) throw new Error("Offline render produced no audio buffer")
+    const channels = Array.isArray(arr[0])
+      ? (arr as Float32Array[])
+      : [arr as Float32Array]
+    const length = channels[0].length
+    const sampleRate =
+      (toneBuffer as { sampleRate?: number }).sampleRate ?? 44100
+    const ab = new AudioBuffer({
+      length,
+      numberOfChannels: channels.length,
+      sampleRate,
+    })
+    channels.forEach((ch, i) => {
+      ab.copyToChannel(new Float32Array(ch), i)
+    })
+    return audioBufferToWav(ab)
+  }
+
+  return audioBufferToWav(native)
 }
