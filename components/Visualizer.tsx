@@ -112,7 +112,7 @@ export function Visualizer({
       ctx.fillStyle = "#666"
       ctx.font = "9px monospace"
       ctx.fillText(
-        `+${voices.length - shown.length} more in the hive mix`,
+        `+${voices.length - shown.length} more in the mix`,
         pad,
         totalH - 8,
       )

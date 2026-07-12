@@ -251,7 +251,7 @@ export function Player({
                 <LoadingIcon
                   label={
                     selected.length > 6
-                      ? `Tuning the hive (${selected.length} voices)…`
+                      ? `Tuning the forest (${selected.length} voices)…`
                       : "Decoding pixels into song…"
                   }
                 />
@@ -362,11 +362,11 @@ export function Player({
                 title={
                   voices.length === 1
                     ? `${voices[0]?.name ?? "Normie"} · PixelSymphony`
-                    : `Hive of ${voices.length} · PixelSymphony`
+                    : `${voices.length} Normies · PixelSymphony`
                 }
                 shareText={
                   voices.length
-                    ? `${voices.length === 1 ? voices[0]?.name : `${voices.length} Normies`} singing on PixelSymphony — tune into the hive. #PixelSymphony #Normies`
+                    ? `${voices.length === 1 ? voices[0]?.name : `${voices.length} Normies`} singing on PixelSymphony — tune in. #PixelSymphony #Normies`
                     : undefined
                 }
               />

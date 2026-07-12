@@ -53,7 +53,7 @@ export function NormiePicker({
     <div className="space-y-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-          Select the hive
+          Select voices
         </h3>
         <span className="text-[10px] text-muted-foreground">
           {selected.length} selected · 1st = primary
@@ -66,7 +66,7 @@ export function NormiePicker({
           className={cn("btn-retro", allSelected && "btn-retro-active")}
           disabled={disabled || availableIds.length === 0}
           onClick={selectAll}
-          title="Hear the whole hive"
+          title="Select all Normies"
         >
           ALL
         </button>
