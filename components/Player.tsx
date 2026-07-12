@@ -5,16 +5,17 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
 import { BlipShare } from "@/components/BlipShare"
+import { HowItWorks } from "@/components/HowItWorks"
 import { LoadingIcon } from "@/components/LoadingIcon"
 import { NormiePicker } from "@/components/NormiePicker"
 import { SkinSwitcher } from "@/components/SkinSwitcher"
 import { SynopsisPanel } from "@/components/SynopsisPanel"
 import { Visualizer } from "@/components/Visualizer"
 import { Slider } from "@/components/ui/slider"
+import { composeScore } from "@/lib/compose"
 import * as audio from "@/lib/audio"
 import { fetchNormieVoices } from "@/lib/normies"
 import type { NormieVoiceInput, SkinId, VoiceScore } from "@/lib/types"
-import { translateToScore } from "@/lib/venice"
 
 const SKIN_KEY = "pixelsymphony-skin"
 
@@ -108,22 +109,18 @@ export function Player({
     try {
       const v = await fetchNormieVoices(ids)
       setVoices(v)
-      const s = await translateToScore(v)
+      const s = composeScore(v)
       setScore(s)
       await audio.loadScore(s)
-      if (ids.length > 6) {
-        toast.message(`Forest mix · ${ids.length} Normies`, {
-          description: `${s.parts.length} layers · on-chain arrangement`,
-        })
-      } else if (s.source === "venice") {
-        toast.success("Venice arrangement ready", {
-          description: "Cached for this selection to save inference",
-        })
-      } else {
-        // Silent-friendly: fallback is the normal path under rate limits
-        toast.message("On-chain arrangement", {
-          description: "Pixels + traits · Venice reserved for limited AI boosts",
-        })
+      if (ids.length > 1) {
+        toast.message(
+          ids.length === 1
+            ? "Voice ready"
+            : `Forest mix · ${ids.length} Normies`,
+          {
+            description: `${s.parts.length} layers from live pixels + traits`,
+          },
+        )
       }
     } catch (err) {
       console.error(err)
@@ -346,6 +343,17 @@ export function Player({
             </div>
             <div className="wmp-panel-inset">
               <SynopsisPanel score={score} voices={voices} />
+            </div>
+          </section>
+
+          {/* How the voice is made */}
+          <section className="wmp-panel">
+            <div className="wmp-panel-label">
+              <span>Signal Path</span>
+              <span className="wmp-panel-hint">how you hear them</span>
+            </div>
+            <div className="wmp-panel-inset">
+              <HowItWorks />
             </div>
           </section>
 

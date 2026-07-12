@@ -529,7 +529,7 @@ export function buildFallbackScore(voices: NormieVoiceInput[]): VoiceScore {
       scale: "dorian",
       parts: [],
       synopsis: "No Normies selected — silence in the forest.",
-      source: "fallback",
+      source: "onchain",
       swing: 0.04,
       loopSeconds: 20,
     }
@@ -682,7 +682,7 @@ export function buildFallbackScore(voices: NormieVoiceInput[]): VoiceScore {
     scale,
     parts: capped,
     synopsis,
-    source: "fallback",
+    source: "onchain",
     swing: 0.05,
     loopSeconds,
   }

@@ -69,7 +69,8 @@ export interface VoiceScore {
   scale: ScaleName
   parts: VoicePart[]
   synopsis: string
-  source: "venice" | "fallback"
+  /** Always on-chain deterministic compose (no AI) */
+  source: "onchain"
   swing?: number
   /** Shared loop length in seconds (forest cycle) */
   loopSeconds?: number
@@ -92,8 +93,5 @@ export const SAMPLE_NORMIE_IDS = [7141, 1, 42] as const
 /** Soft UI hint only — no hard selection cap. Audio layers are capped separately. */
 export const MAX_VOICES = 9999
 
-/** Max simultaneous Tone.js parts (browser CPU safety for ALL hive) */
+/** Max simultaneous Tone.js parts (browser CPU safety for large ensembles) */
 export const MAX_AUDIO_PARTS = 18
-
-/** Above this count we skip Venice and compose locally (prompt size / latency) */
-export const VENICE_VOICE_CAP = 6

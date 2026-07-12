@@ -2,6 +2,7 @@ import Link from "next/link"
 import Image from "next/image"
 
 import { ConnectWallet } from "@/components/ConnectWallet"
+import { HowItWorks } from "@/components/HowItWorks"
 
 export default function HomePage() {
   return (
@@ -32,19 +33,20 @@ export default function HomePage() {
           <p>
             A monochrome 90s media player for{" "}
             <span className="text-foreground/85">Normies</span> on Ethereum.
-            Every loop is composed from live on-chain pixels and traits — no
-            canned tracks, no fake data.
+            Every loop is composed from{" "}
+            <span className="text-foreground/85">
+              live on-chain pixels and traits
+            </span>{" "}
+            — no AI remix, no canned tracks, no fake data.
           </p>
           <p>
-            Drop in a single Normie and hear a full arrangement: lead, pad,
-            bass, and harmony from that one face. Add more and they answer each
-            other like mycelium — signals across the soil, not a wall of noise.
-          </p>
-          <p>
-            Holders and Delegate.xyz hot wallets welcome. Not a holder? Sample
-            mode still plays real on-chain Normies.
+            One Normie is a full arrangement (lead, pad, bass, harmony). Add
+            more and they answer each other like mycelium — signals across the
+            soil. Canvas edits change the bitmap → the song changes.
           </p>
         </div>
+
+        <HowItWorks className="text-left" />
 
         <div className="flex flex-col items-center gap-3">
           <ConnectWallet />

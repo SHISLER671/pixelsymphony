@@ -14,7 +14,12 @@ function roleLabel(index: number): string {
 
 function traitLabels(voice: NormieVoiceInput): string[] {
   return voice.traits
-    .filter((t) => !["Level", "Pixel Count", "Action Points", "Customized"].includes(t.trait_type))
+    .filter(
+      (t) =>
+        !["Level", "Pixel Count", "Action Points", "Customized"].includes(
+          t.trait_type,
+        ),
+    )
     .slice(0, 6)
     .map((t) => `${t.trait_type}: ${t.value}`)
 }
@@ -43,8 +48,6 @@ export function SynopsisPanel({
 
   const key = `${score.root} ${score.scale}`
   const tempo = score.bpm
-  const badge =
-    score.source === "venice" ? "VENICE" : "ON-CHAIN"
 
   return (
     <div
@@ -54,25 +57,24 @@ export function SynopsisPanel({
       )}
     >
       <div className="mb-4 flex items-center justify-between gap-2">
-        <h3 className="text-white tracking-[0.2em]">SYNOPSIS</h3>
-        <span
-          className={cn(
-            "px-2 py-1 text-xs",
-            score.source === "venice"
-              ? "bg-[#222] text-[#0f0]"
-              : "bg-[#222] text-[#aaa]",
-          )}
-        >
-          {badge}
+        <h3 className="tracking-[0.2em] text-white">SYNOPSIS</h3>
+        <span className="bg-[#222] px-2 py-1 text-xs text-[#0f0]">
+          ON-CHAIN
         </span>
       </div>
 
-      <p className="mb-4 text-[#aaa]">
+      <p className="mb-3 text-[#aaa]">
         {voices.length === 0
           ? "Silence in the forest."
           : voices.length === 1
             ? `1 Normie singing in ${key} at ${tempo} BPM.`
             : `${voices.length} Normies singing together in ${key} at ${tempo} BPM.`}
+      </p>
+
+      <p className="mb-4 text-[11px] leading-relaxed text-[#777]">
+        Mapped from live pixels + traits (not AI). Density → tempo · face shape
+        → melody · Type/traits → instruments & feel. Canvas edits rewrite the
+        song.
       </p>
 
       <div className="space-y-6">
