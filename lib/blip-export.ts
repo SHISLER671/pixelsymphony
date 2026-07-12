@@ -215,16 +215,43 @@ export async function recordPixelVideoBlip(options: {
   }
 }
 
-/** Open X/Twitter compose with pre-filled text (web cannot auto-attach files). */
-export function openXCompose(text: string, pageUrl?: string) {
+/** Build X/Twitter web intent URL (text + optional link). Cannot attach files via URL. */
+export function buildXComposeUrl(text: string, pageUrl?: string): string {
   const params = new URLSearchParams()
   params.set("text", text)
   if (pageUrl) params.set("url", pageUrl)
-  window.open(
-    `https://twitter.com/intent/tweet?${params.toString()}`,
-    "_blank",
-    "noopener,noreferrer",
-  )
+  return `https://twitter.com/intent/tweet?${params.toString()}`
+}
+
+/**
+ * Open X compose with pre-filled text.
+ * Call synchronously from a click when possible so popup blockers allow it.
+ * Returns the Window so async code can navigate a pre-opened tab later.
+ */
+export function openXCompose(
+  text: string,
+  pageUrl?: string,
+  existing?: Window | null,
+): Window | null {
+  const href = buildXComposeUrl(text, pageUrl)
+  if (existing && !existing.closed) {
+    try {
+      existing.location.href = href
+      existing.focus()
+      return existing
+    } catch {
+      /* cross-origin or closed */
+    }
+  }
+  return window.open(href, "_blank")
+}
+
+/**
+ * Open a blank tab on user gesture; later navigate it to the X intent.
+ * Prevents popup blockers after long async video capture.
+ */
+export function openBlankTabForShare(): Window | null {
+  return window.open("about:blank", "_blank")
 }
 
 export function downloadBlob(blob: Blob, filename: string) {

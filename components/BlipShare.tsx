@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import * as audio from "@/lib/audio"
 import {
   downloadBlob,
+  openBlankTabForShare,
   openXCompose,
   recordPixelVideoBlip,
   tryNativeShare,
@@ -14,7 +15,10 @@ import {
 
 /** Offline WAV render length (Save Blip) */
 const WAV_DURATION_MS = 20_000
-/** Short video for X attach */
+/**
+ * X video guidance: short clips work best; keep under common 2:20 / size limits.
+ * 12s is a snappy Blip within help.x.com video norms (MP4/H.264 preferred).
+ */
 const X_VIDEO_MS = 12_000
 
 export function BlipShare({
@@ -35,7 +39,7 @@ export function BlipShare({
     shareText ||
     "Listen to my Normie singing in PixelSymphony! #PixelSymphony #Normies"
 
-  /** Save Blip — universal offline WAV (unchanged quality path). */
+  /** Save Blip — universal offline WAV. */
   async function recordAndShareBlip() {
     if (disabled || busy) return
     setBusy(true)
@@ -74,31 +78,41 @@ export function BlipShare({
 
   /**
    * Share on X:
-   * 1) Capture short video (pixel canvas + live audio)
-   * 2) Download with correct extension (mp4 only when H.264+AAC)
-   * 3) Open X compose with pre-filled text (web cannot auto-attach files)
+   * 1) Immediately open a tab (user gesture) → prefilled compose (like before)
+   * 2) Record short pixel+audio video in the background
+   * 3) Download the file so the user can attach it on X
+   *
+   * X web intent cannot auto-attach media — only text/url.
+   * Native share is optional on mobile after the tab is opened.
    */
   async function shareOnX() {
     if (disabled || busy) return
+
+    // Synchronous with the click → avoids popup blockers after 12s capture
+    const xTab = openBlankTabForShare()
+    const pageUrl =
+      typeof window !== "undefined" ? window.location.href : undefined
+
+    // Navigate the reserved tab to compose ASAP with prefilled text
+    openXCompose(defaultShareText, pageUrl, xTab)
+
     setBusy(true)
     setBusyKind("x")
     try {
       const canvas = getCanvas?.() ?? null
       if (!canvas) {
-        toast.error("Visualizer not ready", {
-          description: "Load a Normie first, then try Share on X again.",
+        toast.message("X compose opened", {
+          description: "Load a Normie for a video Blip next time.",
         })
-        openXCompose(defaultShareText, window.location.href)
         return
       }
 
       await audio.unlockAudio()
       await audio.ensureRecordingTap()
-      // Ensure music is audible on the bus while we capture
       await audio.play()
 
-      toast.message("Creating video Blip…", {
-        description: `${X_VIDEO_MS / 1000}s pixel art + audio`,
+      toast.message("Recording video Blip…", {
+        description: `${X_VIDEO_MS / 1000}s · will download so you can attach on X`,
       })
 
       const audioStream = audio.getRecordingStream()
@@ -109,38 +123,41 @@ export function BlipShare({
         fps: 30,
       })
 
-      // Always save locally so the user can attach on X
       downloadBlob(blob, filename)
 
-      const file = new File([blob], filename, {
-        type: blob.type || (filename.endsWith(".mp4") ? "video/mp4" : "video/webm"),
-      })
-
-      // Mobile: native share can open the X app with the file
-      const shared = await tryNativeShare(file, title, defaultShareText)
-
-      // Web compose (text + link). Attach the downloaded video in the UI.
-      openXCompose(defaultShareText, window.location.href)
-
-      if (twitterSafe) {
-        toast.success("MP4 ready for X", {
-          description: shared
-            ? "Share sheet opened — pick X if listed"
-            : "Attach the downloaded .mp4 to your post",
+      // Mobile only: offer OS share sheet as an extra path (does not replace the tab)
+      const isCoarse =
+        typeof window !== "undefined" &&
+        window.matchMedia?.("(pointer: coarse)").matches
+      if (isCoarse) {
+        const file = new File([blob], filename, {
+          type:
+            blob.type ||
+            (filename.endsWith(".mp4") ? "video/mp4" : "video/webm"),
         })
-      } else {
-        toast.message("Video saved", {
-          description:
-            "This browser exports WebM (correct codecs). X desktop prefers MP4 — use Safari/iPhone for H.264+AAC, or convert the WebM. Attach the file to your post.",
-        })
+        void tryNativeShare(file, title, defaultShareText)
       }
+
+      // Keep compose tab focused if still open
+      openXCompose(defaultShareText, pageUrl, xTab)
+
+      toast.success(
+        twitterSafe ? "MP4 downloaded — attach it on X" : "Video downloaded — attach it on X",
+        {
+          description: twitterSafe
+            ? "X compose is open with your text. Use media → pick the Blip file."
+            : "Compose is open. This browser saved WebM (not fake MP4). Prefer Safari for H.264+AAC MP4.",
+        },
+      )
     } catch (e) {
       console.error(e)
-      toast.error("Could not create video Blip", {
+      openXCompose(defaultShareText, pageUrl, xTab)
+      toast.error("Video Blip failed", {
         description:
-          e instanceof Error ? e.message : "Opening X with text only",
+          e instanceof Error
+            ? `${e.message} — X compose still opened with your text.`
+            : "X compose still opened with your text.",
       })
-      openXCompose(defaultShareText, window.location.href)
     } finally {
       setBusy(false)
       setBusyKind(null)
@@ -184,10 +201,10 @@ export function BlipShare({
         </button>
       </div>
       <p className="text-[10px] leading-relaxed text-muted-foreground">
-        <span className="text-foreground/80">Save Blip</span> = universal WAV.{" "}
-        <span className="text-foreground/80">Share on X</span> = short video
-        (MP4 when the browser can do H.264+AAC; otherwise WebM with the correct
-        extension so X doesn&apos;t choke on audio codecs).
+        <span className="text-foreground/80">Share on X</span> opens compose
+        with your text right away, then downloads a short video to attach (X web
+        cannot auto-attach files).{" "}
+        <span className="text-foreground/80">Save Blip</span> = WAV only.
       </p>
     </div>
   )
