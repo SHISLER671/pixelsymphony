@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, type RefObject } from "react"
 
 import type { NormieVoiceInput, SkinId } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -24,13 +24,17 @@ export function Visualizer({
   skin,
   progress = 0,
   className,
+  canvasRef: externalRef,
 }: {
   voices: NormieVoiceInput[]
   skin: SkinId
   progress?: number
   className?: string
+  /** Optional ref so parent can record video blips from this canvas. */
+  canvasRef?: RefObject<HTMLCanvasElement | null>
 }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const localRef = useRef<HTMLCanvasElement>(null)
+  const canvasRef = externalRef ?? localRef
 
   useEffect(() => {
     const canvas = canvasRef.current

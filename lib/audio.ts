@@ -406,18 +406,42 @@ export function getTransportProgress(): number {
   }
 }
 
-export async function startRecording(): Promise<void> {
-  if (!mediaDest) {
+/** Live MediaStream of the master bus (for video blips / share). */
+export function getRecordingStream(): MediaStream | null {
+  return mediaDest?.stream ?? null
+}
+
+/** Ensure the stream tap exists (call after loadScore / unlock). */
+export async function ensureRecordingTap(): Promise<MediaStream | null> {
+  if (mediaDest?.stream) return mediaDest.stream
+  try {
     const T = await getTone()
     const ctx = T.getContext().rawContext as AudioContext
     mediaDest = ctx.createMediaStreamDestination()
+    // Best-effort: destination monitor
+    try {
+      T.getDestination().connect(
+        mediaDest as unknown as import("tone").ToneAudioNode,
+      )
+    } catch {
+      /* already connected via reverb path on loadScore */
+    }
+    return mediaDest.stream
+  } catch {
+    return null
   }
+}
+
+export async function startRecording(): Promise<void> {
+  await ensureRecordingTap()
   if (!mediaDest) throw new Error("Recording not available in this browser")
 
   recordChunks = []
   const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
     ? "audio/webm;codecs=opus"
-    : "audio/webm"
+    : MediaRecorder.isTypeSupported("audio/mp4")
+      ? "audio/mp4"
+      : "audio/webm"
   recorder = new MediaRecorder(mediaDest.stream, { mimeType: mime })
   recorder.ondataavailable = (e) => {
     if (e.data.size > 0) recordChunks.push(e.data)

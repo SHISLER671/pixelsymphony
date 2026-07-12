@@ -560,15 +560,11 @@ export function buildFallbackScore(voices: NormieVoiceInput[]): VoiceScore {
   // Soft audio part cap (primary stack already 3)
   const capped = parts.slice(0, MAX_AUDIO_PARTS)
 
-  const densPct = Math.round(dens * 100)
-  const extra =
-    voices.length > hive.length
-      ? ` Hive of ${voices.length} reduced to ${hive.length} voices for mix clarity.`
-      : voices.length > 1
-        ? ` Hive ensemble: ${voices.length} Normies.`
-        : " Solo: lead + pad + bass from one Normie."
-
-  const synopsis = `Normie #${primary.tokenId} (${type}) sings ${bpm} BPM ${root} ${scale} synthwave. Pixels→melody (${densPct}% density). Expression ${expression} shapes phrasing; ${eyes || "eyes"} color the filter. Type/Accessory choose instruments; Age/Hair/Facial color the feel.${extra}`
+  // Short plain synopsis — UI builds a full structured story from score + voices
+  const synopsis =
+    voices.length <= 1
+      ? `${primary.name || `Normie #${primary.tokenId}`} sings a ${root} ${scale} synthwave loop at ${bpm} BPM.`
+      : `${voices.length} Normies singing together in ${root} ${scale} at ${bpm} BPM.`
 
   return {
     bpm,

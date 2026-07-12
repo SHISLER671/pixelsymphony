@@ -37,6 +37,7 @@ export function Player({
   const [volume, setVolume] = useState(0.7)
   const [needsGesture, setNeedsGesture] = useState(true)
   const rafRef = useRef<number | null>(null)
+  const visualCanvasRef = useRef<HTMLCanvasElement | null>(null)
 
   useEffect(() => {
     try {
@@ -193,7 +194,12 @@ export function Player({
           }
         />
       ) : (
-        <Visualizer voices={voices} skin={skin} progress={progress} />
+        <Visualizer
+          voices={voices}
+          skin={skin}
+          progress={progress}
+          canvasRef={visualCanvasRef}
+        />
       )}
 
       {/* Transport */}
@@ -258,7 +264,20 @@ export function Player({
         <h3 className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
           Share Blip
         </h3>
-        <BlipShare disabled={!score || loading} />
+        <BlipShare
+          disabled={!score || loading}
+          getCanvas={() => visualCanvasRef.current}
+          title={
+            voices.length === 1
+              ? `${voices[0]?.name ?? "Normie"} · PixelSymphony`
+              : `Hive of ${voices.length} · PixelSymphony`
+          }
+          shareText={
+            voices.length
+              ? `${voices.length === 1 ? voices[0]?.name : `${voices.length} Normies`} singing on PixelSymphony — tune into the hive. #PixelSymphony #Normies`
+              : undefined
+          }
+        />
       </div>
     </div>
   )
